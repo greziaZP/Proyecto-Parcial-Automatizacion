@@ -33,7 +33,14 @@ export async function seedFuga() {
         ? faker.helpers.arrayElement(usuarios)?.id ?? null
         : null;
       const resueltoEn = estado !== 'pendiente'
-        ? `${ac.fecha}T${faker.number.int({min:8,max:12})}:${String(faker.number.int({min:0,max:59})).padStart(2,'0')}:00-05:00`
+        ? (() => {
+            const fecha = typeof ac.fecha === 'string' 
+              ? ac.fecha 
+              : new Date(ac.fecha).toISOString().split('T')[0];
+            const hora = faker.number.int({min:8,max:12});
+            const min = String(faker.number.int({min:0,max:59})).padStart(2,'0');
+            return `${fecha}T${hora}:${min}:00-05:00`;
+          })()
         : null;
 
       await client.query(

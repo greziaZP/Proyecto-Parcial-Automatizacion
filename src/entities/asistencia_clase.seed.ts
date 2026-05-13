@@ -50,6 +50,8 @@ export async function seedAsistenciaClase() {
     }
 
     let insertados = 0;
+    const BATCH_SIZE = 1000;
+    let batch: Array<[number, number, string, string, number]> = [];
 
     for (const fecha of fechas) {
       const diaNombre = MAP_DIA[fecha.getDay()];
@@ -72,16 +74,21 @@ export async function seedAsistenciaClase() {
           else if (rand < 0.99) estado = 'fuga';
           else                  estado = 'justificado';
 
-          await client.query(
-            `INSERT INTO asistencia_clase
-               (matricula_id, horario_clase_id, fecha, estado, registrado_por)
-             VALUES ($1,$2,$3,$4,$5)
-             ON CONFLICT DO NOTHING`,
-            [matriculaId, h.horario_id, fechaStr, estado, h.docente_usuario_id]
-          );
+          batch.push([matriculaId, h.horario_id, fechaStr, estado, h.docente_usuario_id]);
           insertados++;
+
+          // Ejecutar batch insert cada 1000 registros
+          if (batch.length >= BATCH_SIZE) {
+            await batchInsertAsistenciaClase(client, batch);
+            batch = [];
+          }
         }
       }
+    }
+
+    // Insertar los registros restantes
+    if (batch.length > 0) {
+      await batchInsertAsistenciaClase(client, batch);
     }
 
     console.log(`✅ ${insertados} registros de asistencia_clase insertados`);
@@ -91,6 +98,27 @@ export async function seedAsistenciaClase() {
   } finally {
     client.release();
   }
+}
+
+async function batchInsertAsistenciaClase(
+  client: any,
+  batch: Array<[number, number, string, string, number]>
+): Promise<void> {
+  if (batch.length === 0) return;
+
+  const values = batch
+    .map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`)
+    .join(',');
+
+  const params = batch.flat();
+
+  await client.query(
+    `INSERT INTO asistencia_clase
+       (matricula_id, horario_clase_id, fecha, estado, registrado_por)
+     VALUES ${values}
+     ON CONFLICT DO NOTHING`,
+    params
+  );
 }
 
 if (require.main === module) {

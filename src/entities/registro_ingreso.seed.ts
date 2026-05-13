@@ -44,6 +44,8 @@ export async function seedRegistroIngreso() {
 
     const fechas = diasHabiles(60); // 60 días hábiles ~ 3 meses
     let insertados = 0;
+    const BATCH_SIZE = 1000;
+    let batch: Array<[number, number, string, string | null, string]> = [];
 
     for (const fecha of fechas) {
       const fechaStr = fecha.toISOString().split('T')[0];
@@ -72,15 +74,20 @@ export async function seedRegistroIngreso() {
           horaLlegada = null;
         }
 
-        await client.query(
-          `INSERT INTO registro_ingreso
-             (matricula_id, auxiliar_id, fecha, hora_llegada, estado)
-           VALUES ($1,$2,$3,$4,$5)
-           ON CONFLICT DO NOTHING`,
-          [mat.id, auxiliarId, fechaStr, horaLlegada, estado]
-        );
+        batch.push([mat.id, auxiliarId, fechaStr, horaLlegada, estado]);
         insertados++;
+
+        // Ejecutar batch insert cada 1000 registros
+        if (batch.length >= BATCH_SIZE) {
+          await batchInsertRegistroIngreso(client, batch);
+          batch = [];
+        }
       }
+    }
+
+    // Insertar los registros restantes
+    if (batch.length > 0) {
+      await batchInsertRegistroIngreso(client, batch);
     }
 
     console.log(`✅ ${insertados} registros de ingreso insertados`);
@@ -91,6 +98,27 @@ export async function seedRegistroIngreso() {
   } finally {
     client.release();
   }
+}
+
+async function batchInsertRegistroIngreso(
+  client: any,
+  batch: Array<[number, number, string, string | null, string]>
+): Promise<void> {
+  if (batch.length === 0) return;
+
+  const values = batch
+    .map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`)
+    .join(',');
+
+  const params = batch.flat();
+
+  await client.query(
+    `INSERT INTO registro_ingreso
+       (matricula_id, auxiliar_id, fecha, hora_llegada, estado)
+     VALUES ${values}
+     ON CONFLICT DO NOTHING`,
+    params
+  );
 }
 
 if (require.main === module) {
