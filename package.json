@@ -1,0 +1,42 @@
+{
+  "name": "asistencia-seeder",
+  "version": "1.0.0",
+  "description": "Seeder para el sistema de control de asistencia - Colegio Rafael Narváez Cadenillas",
+  "main": "index.js",
+  "scripts": {
+    "clean":              "tsx src/cleaner.ts",
+    "seed:schema":        "tsx src/schema-creation.seed.ts",
+    "seed:manager":       "tsx src/manager.seed.ts",
+    "seed:ano":           "tsx src/entities/ano_escolar.seed.ts",
+    "seed:periodos":      "tsx src/entities/periodo_trimestral.seed.ts",
+    "seed:cursos":        "tsx src/entities/curso.seed.ts",
+    "seed:secciones":     "tsx src/entities/seccion.seed.ts",
+    "seed:usuarios":      "tsx src/entities/usuario.seed.ts",
+    "seed:estudiantes":   "tsx src/entities/estudiante.seed.ts",
+    "seed:docentes":      "tsx src/entities/docente.seed.ts",
+    "seed:padres":        "tsx src/entities/padre_familia.seed.ts",
+    "seed:vinculos":      "tsx src/entities/relacion_padre_estudiante.seed.ts",
+    "seed:matriculas":    "tsx src/entities/matricula.seed.ts",
+    "seed:horarios":      "tsx src/entities/horario_clase.seed.ts",
+    "seed:ingresos":      "tsx src/entities/registro_ingreso.seed.ts",
+    "seed:asistencias":   "tsx src/entities/asistencia_clase.seed.ts",
+    "seed:fugas":         "tsx src/entities/fuga.seed.ts",
+    "seed:permisos":      "tsx src/entities/permiso_salida.seed.ts",
+    "seed:justificaciones":"tsx src/entities/justificacion.seed.ts",
+    "seed:notas":         "tsx src/entities/nota_actitudinal.seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@faker-js/faker": "^10.1.0",
+    "@types/node": "^24.0.0",
+    "dotenv": "^17.0.0",
+    "pg": "^8.13.0",
+    "@types/pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0"
+  }
+}
