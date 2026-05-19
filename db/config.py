@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 # ── Cargar .env desde raíz del proyecto ───────────────────────────────────────
 _env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path)
-
+print(_env_path)
 # ── Configuración PostgreSQL ───────────────────────────────────────────────────
 DB_CONFIG = {
     "host":     os.getenv("POSTGRES_HOST",     "localhost"),

@@ -2,24 +2,45 @@ from app.mcp.schemas import (
     BuscarHistorialInput,
     BuscarHistorialOutput,
     RegistrarCitacionInput,
-    RegistrarCitacionOutput
+    RegistrarCitacionOutput,
+    GestionarJustificacionInput,
+    GestionarJustificacionOutput
+)
+from app.queries.agentes_queries import (
+    query_historial_estudiante,
+    query_upsert_justificacion,
+    query_insert_citacion
 )
 
-def buscar_historial(input_data: BuscarHistorialInput) -> BuscarHistorialOutput:
+def mcp_buscar_historial_estudiante(input_data: BuscarHistorialInput) -> BuscarHistorialOutput:
     """
-    Busca el historial completo de asistencia y comportamiento de un estudiante en PostgreSQL.
-    
-    Esencial para que el Agente Analista pueda evaluar el patrón conductual y
-    determinar si una falta es recurrente o un incidente aislado.
+    Busca el historial real de asistencia y comportamiento de un estudiante en PostgreSQL.
     """
-    raise NotImplementedError("Database connection not yet implemented")
+    resultado = query_historial_estudiante(str(input_data.estudiante_uid))
+    return BuscarHistorialOutput(
+        ultimas_faltas_tardanzas=resultado["ultimas_faltas_tardanzas"],
+        acumulados=resultado["acumulados"]
+    )
 
-def registrar_citacion(input_data: RegistrarCitacionInput) -> RegistrarCitacionOutput:
+def mcp_gestionar_justificacion(input_data: GestionarJustificacionInput) -> GestionarJustificacionOutput:
     """
-    Registra de manera formal una nueva citación presencial entre el departamento 
-    (ej. Psicopedagogía o Dirección) y los apoderados del estudiante en PostgreSQL.
-    
-    Invocar únicamente cuando el flujo agéntico determinó que la falta requiere
-    intervención humana superior.
+    Inserta una justificación formal conectada a la base de datos real.
     """
-    raise NotImplementedError("Database connection not yet implemented")
+    datos = input_data.model_dump(exclude_unset=True)
+    # Formateo explícito si es necesario, psycopg2 suele lidiar bien con types de python
+    uid_generado = query_upsert_justificacion(datos)
+    return GestionarJustificacionOutput(
+        justificacion_uid=uid_generado,
+        status="success"
+    )
+
+def mcp_registrar_citacion(input_data: RegistrarCitacionInput) -> RegistrarCitacionOutput:
+    """
+    Registra de manera formal una nueva citación presencial en PostgreSQL.
+    """
+    datos = input_data.model_dump(exclude_unset=True)
+    uid_generado = query_insert_citacion(datos)
+    return RegistrarCitacionOutput(
+        citacion_uid=uid_generado,
+        status="success"
+    )

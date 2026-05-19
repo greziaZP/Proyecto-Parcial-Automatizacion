@@ -450,6 +450,30 @@ def create_schema() -> None:
         """)
         print("✅ nota_actitudinal creada  [UUID, DECIMAL(14,2)]")
 
+        # ══════════════════════════════════════════════════════════════════════
+        # 22. CITACIONES (UUID PK)
+        # ══════════════════════════════════════════════════════════════════════
+        cur.execute("""
+            CREATE TABLE citacion (
+                uid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                estudiante_uid UUID NOT NULL,
+                padre_apoderado_uid UUID NOT NULL,
+                docente_solicitante_uid UUID NOT NULL,
+                motivo VARCHAR(255) NOT NULL,
+                nivel_urgencia VARCHAR(50) NOT NULL,
+                estado VARCHAR(50) DEFAULT 'programada' NOT NULL,
+                fecha_citacion TIMESTAMP NOT NULL,
+                creado_en TIMESTAMP DEFAULT now() NOT NULL,
+                
+                CONSTRAINT citacion_estudiante_fkey FOREIGN KEY (estudiante_uid) REFERENCES estudiante(uid) ON DELETE CASCADE,
+                CONSTRAINT citacion_padre_fkey FOREIGN KEY (padre_apoderado_uid) REFERENCES padre_familia(uid) ON DELETE CASCADE,
+                CONSTRAINT citacion_docente_fkey FOREIGN KEY (docente_solicitante_uid) REFERENCES docente(uid) ON DELETE CASCADE
+            );
+            CREATE INDEX idx_citacion_estudiante ON citacion(estudiante_uid);
+            CREATE INDEX idx_citacion_estado ON citacion(estado);
+        """)
+        print("✅ citacion creada  [UUID]")
+
         conn.commit()
         print("\n🎉 Esquema v3 creado exitosamente en Supabase!")
         print("\n📋 Tablas creadas (todas UUID):")
