@@ -89,12 +89,18 @@ def _get_pg_conn() -> psycopg2.extensions.connection:
 
 
 def _get_qdrant() -> QdrantClient:
-    """Retorna cliente Qdrant configurado con las variables del .env."""
+    """Retorna cliente Qdrant configurado con las variables del .env.
+
+    NOTA: https=False es obligatorio para instancias locales (docker-compose).
+    qdrant-client >=1.9 activa TLS automáticamente cuando se pasa api_key,
+    pero el contenedor local no tiene certificado SSL.
+    """
     api_key = os.getenv("QDRANT_API_KEY") or None
     return QdrantClient(
         host=os.getenv("QDRANT_HOST", "localhost"),
         port=int(os.getenv("QDRANT_PORT", "6333")),
         api_key=api_key,
+        https=False,   # forzar HTTP plano — sin TLS en entorno local
     )
 
 
