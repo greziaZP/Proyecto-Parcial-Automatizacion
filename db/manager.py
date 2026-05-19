@@ -56,6 +56,7 @@ from seeds.asistencia              import seed_registro_ingreso, seed_asistencia
 from seeds.justificacion           import seed_justificacion
 from seeds.fuga                    import seed_fuga
 from seeds.nota_actitudinal        import seed_nota_actitudinal
+from seeds.citacion                import seed_citacion
 
 
 def _paso(nombre: str, fn, *args, **kwargs):
@@ -120,6 +121,10 @@ def run_all():
         print("\n📦 NIVEL 9 — Fugas y notas actitudinales")
         _paso("fuga",              seed_fuga)
         _paso("nota_actitudinal",  seed_nota_actitudinal)
+
+        # ── NIVEL 10: Citaciones ───────────────────────────────────────────────
+        print("\n📦 NIVEL 10 — Citaciones")
+        _paso("citacion",          seed_citacion)
 
         # ── Resumen final ──────────────────────────────────────────────────────
         total_s = time.time() - inicio_total
