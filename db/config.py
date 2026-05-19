@@ -29,11 +29,11 @@ load_dotenv(dotenv_path=_env_path)
 
 # ── Configuración PostgreSQL ───────────────────────────────────────────────────
 DB_CONFIG = {
-    "host":     os.getenv("PG_HOST",     "localhost"),
-    "port":     int(os.getenv("PG_PORT", "5432")),
-    "user":     os.getenv("PG_USER",     "postgres"),
-    "password": os.getenv("PG_PASSWORD", ""),
-    "dbname":   os.getenv("PG_DATABASE", "postgres"),
+    "host":     os.getenv("POSTGRES_HOST",     "localhost"),
+    "port":     int(os.getenv("POSTGRES_PORT", "5432")),
+    "user":     os.getenv("POSTGRES_USER",     "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", ""),
+    "dbname":   os.getenv("POSTGRES_DB", "postgres"),
 }
 
 _pool: pg_pool.SimpleConnectionPool | None = None
