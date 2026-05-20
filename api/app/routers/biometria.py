@@ -281,23 +281,49 @@ async def marcar_ingreso(
         cur.execute(
             "INSERT INTO registro_ingreso "
             "(matricula_uid, estudiante_uid, fecha_ingreso, hora_llegada, estado_ingreso) "
-            "VALUES (%s, %s, CURRENT_DATE, CURRENT_TIMESTAMP, %s);",
+            "VALUES (%s, %s, CURRENT_DATE, CURRENT_TIMESTAMP, %s) "
+            "ON CONFLICT (matricula_uid, fecha_ingreso) DO NOTHING "
+            "RETURNING hora_llegada, estado_ingreso;",
             (str(matricula_uid), estudiante_uid, estado_ingreso),
         )
+        inserted = cur.fetchone()
 
-    hora_str = ahora.strftime("%H:%M:%S")
+        if inserted:
+            hora_llegada = inserted["hora_llegada"]
+            estado_final = inserted["estado_ingreso"]
+            mensaje = f"Bienvenido {nombres} {apellidos}"
+        else:
+            cur.execute(
+                "SELECT hora_llegada, estado_ingreso "
+                "FROM registro_ingreso "
+                "WHERE matricula_uid = %s AND fecha_ingreso = CURRENT_DATE;",
+                (str(matricula_uid),),
+            )
+            previo = cur.fetchone()
+
+            if not previo:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Ya existe un registro de ingreso para hoy, pero no se pudo recuperar.",
+                )
+
+            hora_llegada = previo["hora_llegada"]
+            estado_final = previo["estado_ingreso"]
+            mensaje = f"Ingreso ya registrado para {nombres} {apellidos}"
+
+    hora_str = hora_llegada.strftime("%H:%M:%S")
     logger.info(
         "Ingreso registrado: %s %s — %s (%s)",
-        nombres, apellidos, estado_ingreso, hora_str,
+        nombres, apellidos, estado_final, hora_str,
     )
 
     return {
         "success": True,
-        "mensaje": f"Bienvenido {nombres} {apellidos}",
+        "mensaje": mensaje,
         "estudiante_uid": estudiante_uid,
         "nombres": nombres,
         "apellidos": apellidos,
-        "estado_ingreso": estado_ingreso,
+        "estado_ingreso": estado_final,
         "hora_llegada": hora_str,
     }
 
