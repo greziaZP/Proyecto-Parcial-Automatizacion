@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import asistencia, justificaciones, dashboard
 from routers.biometria import router_biometria, router_rest
 from routers.rekognition_asistencia import router as router_rekognition
-from routers.sesion import router as router_sesion
 
 app = FastAPI(
     title="API de Asistencia e Intervención Académica",
@@ -27,8 +26,6 @@ app.include_router(asistencia.router)
 app.include_router(justificaciones.router)
 app.include_router(dashboard.router)
 
-# ── Sesión de asistencia (secciones, horarios, alumnos, marcar) ──────────────
-app.include_router(router_sesion)         # GET/POST /sesion/*
 
 # ── AWS Rekognition ──────────────────────────────────────────────────────────
 app.include_router(router_biometria)      # POST /biometria/registrar
