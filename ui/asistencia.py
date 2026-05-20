@@ -16,6 +16,13 @@ load_dotenv()
 
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
+
+def _safe_json(response: requests.Response) -> dict | None:
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
 # ─── Configuración de la página ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Sistema de Asistencia Biométrica",
@@ -355,13 +362,14 @@ with tab_enrolamiento:
                                 timeout=30,
                             )
 
+                            data = _safe_json(resp)
+
                             if resp.status_code == 201:
-                                resultado = resp.json()
-                                mensaje = resultado.get("mensaje", "Registro exitoso.")
-                                st.success(f"{mensaje}")
+                                mensaje = (data or {}).get("mensaje", "Registro exitoso.")
+                                st.success(mensaje)
                                 st.balloons()
                             else:
-                                detalle = resp.json().get("detail", resp.text)
+                                detalle = (data or {}).get("detail") or resp.text or "Error inesperado."
                                 st.error(f"Error: {detalle}")
 
                         except requests.RequestException as e:
@@ -481,8 +489,9 @@ with tab_ingreso:
                                 timeout=30,
                             )
 
-                            if resp.status_code == 200:
-                                data = resp.json()
+                            data = _safe_json(resp)
+
+                            if resp.status_code == 200 and data:
                                 st.session_state.intentos_ingreso = 0
                                 st.session_state.ultimo_resultado = {
                                     "tipo": "exito",
@@ -491,7 +500,7 @@ with tab_ingreso:
                                 st.rerun()
                             else:
                                 st.session_state.intentos_ingreso += 1
-                                detalle = resp.json().get("detail", resp.text)
+                                detalle = (data or {}).get("detail") or resp.text or "Error inesperado."
 
                                 if st.session_state.intentos_ingreso >= MAX_INTENTOS:
                                     st.session_state.ultimo_resultado = {"tipo": "fallo"}

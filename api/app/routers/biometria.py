@@ -48,13 +48,16 @@ def _ensure_collection_exists(collection_id: str) -> None:
             logger.info("Rekognition collection creada: %s", collection_id)
         except ClientError as e:
             logger.error("No se pudo crear la coleccion Rekognition: %s", e)
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No se pudo crear la coleccion de Rekognition. Verifique credenciales y permisos.",
+            )
     except ClientError as e:
         logger.error("Error al verificar coleccion Rekognition: %s", e)
-        raise
-
-
-_ensure_collection_exists(COLLECTION_ID)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No se pudo verificar la coleccion de Rekognition. Intente nuevamente.",
+        )
 SIMILARITY_THRESHOLD = float(os.getenv("REKOGNITION_SIMILARITY_THRESHOLD", "90.0"))
 HORA_LIMITE = time(8, 0, 0)  # 08:00 AM — umbral puntualidad
 
@@ -147,6 +150,7 @@ async def registrar_rostro(
         )
 
     # ── Indexar rostro en AWS Rekognition ─────────────────────────────────
+    _ensure_collection_exists(COLLECTION_ID)
     try:
         response = rekognition.index_faces(
             CollectionId=COLLECTION_ID,
@@ -216,6 +220,7 @@ async def marcar_ingreso(
         )
 
     # ── Buscar rostro en la colección de Rekognition ─────────────────────
+    _ensure_collection_exists(COLLECTION_ID)
     try:
         response = rekognition.search_faces_by_image(
             CollectionId=COLLECTION_ID,
