@@ -7,7 +7,7 @@ from app.mcp.schemas import RegistrarCitacionInput, GestionarJustificacionInput
 
 class MediadorAgent:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"))
+        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.system_prompt = """
         Eres el Agente Mediador y Resolutor de Conflictos. Tienes la máxima autoridad para alterar la base de datos del colegio.
 
@@ -66,7 +66,7 @@ class MediadorAgent:
 
         while True:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gemini-1.5-flash",
                 messages=messages,
                 tools=self.tools,
                 temperature=0.2

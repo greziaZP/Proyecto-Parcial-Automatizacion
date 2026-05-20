@@ -9,7 +9,7 @@ from app.agents.mediador import MediadorAgent
 
 class OrquestadorAgent:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"))
+        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.system_prompt = """
         Eres el Agente Orquestador. Basado en el SharedState y el mensaje del usuario, 
         debes determinar cuál es el próximo Agente a invocar utilizando tu herramienta de enrutamiento, o devolver el resultado final.
@@ -43,7 +43,7 @@ class OrquestadorAgent:
             ]
 
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gemini-1.5-flash",
                 messages=messages,
                 tools=self.tools,
                 tool_choice={"type": "function", "function": {"name": "handoff"}},

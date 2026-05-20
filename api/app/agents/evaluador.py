@@ -7,7 +7,7 @@ from app.mcp.schemas import ConsultarReglamentoInput
 
 class EvaluadorAgent:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"))
+        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.system_prompt = """
         Eres el Agente Evaluador Normativo. Tu función es puramente legal e institucional.
 
@@ -38,7 +38,7 @@ class EvaluadorAgent:
 
         while True:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gemini-1.5-flash",
                 messages=messages,
                 tools=self.tools,
                 temperature=0.2

@@ -39,7 +39,7 @@ class AnalistaAgent:
 
         while True:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gemini-1.5-flash",
                 messages=messages,
                 tools=self.tools,
                 temperature=0.2
