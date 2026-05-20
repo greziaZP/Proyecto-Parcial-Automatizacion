@@ -35,6 +35,24 @@ rekognition = boto3.client(
 COLLECTION_ID        = os.getenv("REKOGNITION_COLLECTION_ID", "colegio-faces")
 SIMILARITY_THRESHOLD = float(os.getenv("REKOGNITION_SIMILARITY_THRESHOLD", "90.0"))
 
+
+def _ensure_collection_exists(collection_id: str) -> None:
+    try:
+        rekognition.describe_collection(CollectionId=collection_id)
+    except rekognition.exceptions.ResourceNotFoundException:
+        try:
+            rekognition.create_collection(CollectionId=collection_id)
+            logger.info("Rekognition collection creada: %s", collection_id)
+        except ClientError as e:
+            logger.error("No se pudo crear la coleccion Rekognition: %s", e)
+            raise
+    except ClientError as e:
+        logger.error("Error al verificar coleccion Rekognition: %s", e)
+        raise
+
+
+_ensure_collection_exists(COLLECTION_ID)
+
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class RegistrarAsistenciaRequest(BaseModel):
