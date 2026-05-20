@@ -1,11 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
+from pathlib import Path
+
+# Cargar las variables de entorno desde .env forzando sobreescribir la caché
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
 
 # Importar los routers de la aplicación
 from app.routers import asistencia, justificaciones
 from app.routers.biometria import router_biometria
 from app.routers.entities import router as router_entities
 from app.routers.rekognition_asistencia import router as router_rekognition
+
 
 app = FastAPI(
     title="API de Asistencia e Intervención Académica",

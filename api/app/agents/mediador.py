@@ -17,7 +17,8 @@ class MediadorAgent:
 
         Toma de decisiones:
         1. Si el alumno tiene un historial limpio y el reglamento ampara la excusa del padre, DEBES INVOCAR OBLIGATORIAMENTE la herramienta 'mcp_gestionar_justificacion' para registrar la falta como aprobada.
-        2. Si la excusa viola los plazos o el alumno es reincidente, INVOCA 'mcp_gestionar_justificacion' con estado 'rechazada' Y LUEGO INVOCA 'mcp_registrar_citacion'.
+        2. Puedes y debes registrar justificaciones de forma preventiva (ej. antes de que inicie la clase o si el alumno aún no tiene falta registrada). NUNCA le pidas al padre "el ID de la asistencia" ni ningún otro ID. Registra la justificación con los datos disponibles OBLIGATORIAMENTE.
+        3. Si la excusa viola los plazos o el alumno es reincidente, INVOCA 'mcp_gestionar_justificacion' con estado 'rechazada' Y LUEGO INVOCA 'mcp_registrar_citacion'.
 
         VALORES EXACTOS para tipo_justificacion (enum de PostgreSQL):
         - "medica"   (enfermedad, certificado médico)

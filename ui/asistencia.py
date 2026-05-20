@@ -699,16 +699,75 @@ if active_tab == "ingreso":
 
 if active_tab == "padres":
     st.markdown("<div class=\"app-shell\">", unsafe_allow_html=True)
+    
     st.markdown(
         """
-<div class="panel" style="text-align:center; min-height:400px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-top:20px;">
-<div class="section-title">Portal para Padres</div>
-<div class="section-subtitle">Bienvenido al portal para padres. Aqui podras interactuar con el asistente virtual.</div>
-<span class="material-symbols-outlined" style="font-size:64px; color:var(--outline); margin-top:20px;">family_restroom</span>
-</div>
+        <div class="panel" style="margin-top:20px;">
+            <div class="section-title">Portal para Padres</div>
+            <div class="section-subtitle">Tus justificaciones registradas y estado actual. Usa el asistente virtual (esquina inferior derecha) para crear nuevas.</div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
+
+    padre_id = "888f7f70-14aa-4310-8775-7f8d609f8745"
+    
+    col1, col2 = st.columns([0.85, 0.15])
+    with col2:
+        if st.button("🔄 Actualizar", use_container_width=True):
+            st.rerun()
+
+    try:
+        resp = requests.get(f"{API_BASE}/justificaciones/", timeout=10)
+        data = _safe_json(resp)
+        if resp.status_code == 200 and isinstance(data, list):
+            # Filtrar por el padre hardcodeado (opcional, pero buena práctica si el endpoint devuelve todo)
+            justificaciones = [j for j in data if j.get("padre_uid") == padre_id]
+            
+            if justificaciones:
+                filas_html = ""
+                for j in justificaciones:
+                    estado = j.get("estado_justificacion", "pendiente")
+                    color_badge = "var(--success)" if estado == "aprobada" else "var(--error)" if estado == "rechazada" else "var(--warning)"
+                    filas_html += f"""
+                    <tr>
+                        <td style="padding: 12px; border-bottom: 1px solid var(--outline);">{j.get('fecha_presentacion', '')}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid var(--outline); text-transform: capitalize;">{j.get('tipo_justificacion', '')}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid var(--outline);">{j.get('descripcion_motivo', '')}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid var(--outline);">
+                            <span style="background: {color_badge}; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase;">
+                                {estado}
+                            </span>
+                        </td>
+                    </tr>
+                    """
+
+                # Renderizar tabla en HTML directo
+                html_tabla = f"""
+                <div class="panel" style="margin-top:20px; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                        <thead>
+                            <tr style="background: var(--surface-2);">
+                                <th style="padding: 12px; border-bottom: 2px solid var(--outline);">Fecha Registro</th>
+                                <th style="padding: 12px; border-bottom: 2px solid var(--outline);">Tipo</th>
+                                <th style="padding: 12px; border-bottom: 2px solid var(--outline);">Motivo</th>
+                                <th style="padding: 12px; border-bottom: 2px solid var(--outline);">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filas_html}
+                        </tbody>
+                    </table>
+                </div>
+                """
+                st.markdown(html_tabla, unsafe_allow_html=True)
+            else:
+                st.info("No tienes justificaciones registradas aún.")
+        else:
+            st.error("No se pudieron cargar las justificaciones o el formato es incorrecto.")
+    except Exception as e:
+        st.error("Error conectando con el servidor para obtener el historial.")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
