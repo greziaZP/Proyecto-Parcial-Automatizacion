@@ -342,6 +342,8 @@ def seed_reglamento():
 # =============================================================================
 
 if __name__ == "__main__":
+    print("⏳ Esperando 10s a que Qdrant esté listo...")
+    time.sleep(10)
     try:
         seed_reglamento()
     except Exception as e:

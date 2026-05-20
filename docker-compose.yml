@@ -49,11 +49,6 @@ services:
       QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
 
   vector-seed:
@@ -67,7 +62,7 @@ services:
       QDRANT_API_KEY: ${QDRANT_API_KEY}
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: "no"
 
   api:
