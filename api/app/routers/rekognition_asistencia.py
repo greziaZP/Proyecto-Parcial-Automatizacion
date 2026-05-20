@@ -32,7 +32,7 @@ rekognition = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
 )
 
-COLLECTION_ID        = os.getenv("REKOGNITION_COLLECTION_ID", "colegio-faces")
+COLLECTION_ID        = os.getenv("REKOGNITION_COLLECTION_ID", "colegio_faces")
 SIMILARITY_THRESHOLD = float(os.getenv("REKOGNITION_SIMILARITY_THRESHOLD", "90.0"))
 
 
