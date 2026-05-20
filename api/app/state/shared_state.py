@@ -6,10 +6,11 @@ class SharedState(BaseModel):
     Memoria Compartida (Shared State) que viaja y muta a través 
     de los distintos agentes del Swarm.
     """
-    # Identificadores básicos
+    # Identificadores basicos
     alumno_id: str
     incidencia_id: str
     padre_id: Optional[str] = None
+    docente_id: Optional[str] = None
     
     # Estado del flujo
     tipo_flujo: str

@@ -17,7 +17,15 @@ class MediadorAgent:
         1. Si el alumno tiene un historial limpio y el reglamento ampara la excusa del padre, DEBES INVOCAR OBLIGATORIAMENTE la herramienta 'mcp_gestionar_justificacion' para registrar la falta como aprobada.
         2. Si la excusa viola los plazos o el alumno es reincidente, INVOCA 'mcp_gestionar_justificacion' con estado 'rechazada' Y LUEGO INVOCA 'mcp_registrar_citacion'.
 
-        IMPORTANTE: NO DEBES escribir el resultado de la función en formato JSON plano en tu texto. DEBES usar el sistema de Tools/Function Calling para activar las funciones reales con los UUID que se te proporcionan en estado completo (como padre_id, incidencia_id que se mapea a asistencia_clase_uid, etc).
+        VALORES EXACTOS para tipo_justificacion (enum de PostgreSQL):
+        - "medica"   (enfermedad, certificado médico)
+        - "familiar" (fallecimiento, urgencia familiar)
+        - "viaje"    (viaje autorizado)
+        - "otra"     (cualquier otro motivo)
+
+        NUNCA uses valores como "JUSTIFICACION_MEDICA". Usa SIEMPRE los valores en minúsculas: medica, familiar, viaje, otra.
+
+        IMPORTANTE: NO DEBES escribir el resultado de la función en formato JSON plano en tu texto. DEBES usar el sistema de Tools/Function Calling para activar las funciones reales con los UUID que se te proporcionan en estado completo (como padre_id, docente_id, incidencia_id que se mapea a asistencia_clase_uid, etc).
         """
         self.tools = [
             {
@@ -42,17 +50,18 @@ class MediadorAgent:
                 "type": "function",
                 "function": {
                     "name": "mcp_gestionar_justificacion",
-                    "description": "Registra una justificación de incidencia formal.",
+                    "description": "Registra una justificación de incidencia formal. Valores permitidos para tipo_justificacion: medica, familiar, viaje, otra.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "padre_solicitante_uid": {"type": "string"},
-                            "tipo_justificacion": {"type": "string"},
+                            "tipo_justificacion": {"type": "string", "enum": ["medica", "familiar", "viaje", "otra"]},
                             "fecha_inicio_incidencia": {"type": "string", "format": "date"},
                             "fecha_fin_incidencia": {"type": "string", "format": "date"},
-                            "descripcion_motivo": {"type": "string"}
+                            "descripcion_motivo": {"type": "string"},
+                            "estado_justificacion": {"type": "string", "enum": ["pendiente", "aprobada", "rechazada"], "description": "Estado de la justificación. Usar 'aprobada' si el reglamento ampara, 'rechazada' si no."}
                         },
-                        "required": ["padre_solicitante_uid", "tipo_justificacion", "fecha_inicio_incidencia", "fecha_fin_incidencia", "descripcion_motivo"]
+                        "required": ["padre_solicitante_uid", "tipo_justificacion", "fecha_inicio_incidencia", "fecha_fin_incidencia", "descripcion_motivo", "estado_justificacion"]
                     }
                 }
             }

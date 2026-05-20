@@ -3,13 +3,12 @@ from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 from app.mcp.schemas import ConsultarReglamentoInput, ConsultarReglamentoOutput
 
-# Instanciar el modelo de embeddings a nivel de módulo (cacheado en memoria)
-encoder = SentenceTransformer('all-MiniLM-L6-v2')
+encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
-# Configurar Qdrant Client conectando al servicio local
 qdrant_host = os.getenv("QDRANT_HOST", "localhost")
 qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-client = QdrantClient(host=qdrant_host, port=qdrant_port)
+qdrant_api_key = os.getenv("QDRANT_API_KEY") or None
+client = QdrantClient(host=qdrant_host, port=qdrant_port, api_key=qdrant_api_key, https=False)
 
 def consultar_reglamento(input_data: ConsultarReglamentoInput) -> ConsultarReglamentoOutput:
     """

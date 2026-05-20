@@ -23,7 +23,7 @@ def test_swarm():
     estado_inicial = SharedState(
         alumno_id="b319354c-d876-4231-a69c-97e87c776646",
         incidencia_id=str(uuid.uuid4()),
-        padre_id=str(uuid.uuid4()),  # Simulamos un padre en la DB
+        padre_id="888f7f70-14aa-4310-8775-7f8d609f8745",  # Simulamos un padre en la DB
         tipo_flujo="JUSTIFICACION_MEDICA",
         estado_actual="INICIO",
         fecha_actual=str(date.today())

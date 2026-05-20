@@ -1,69 +1,27 @@
-import json
-import os
-from openai import OpenAI
 from app.state.shared_state import SharedState
-
 from app.agents.analista import AnalistaAgent
 from app.agents.evaluador import EvaluadorAgent
 from app.agents.mediador import MediadorAgent
 
 class OrquestadorAgent:
-    def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
-        self.system_prompt = """
-        Eres el Agente Orquestador. Basado en el SharedState y el mensaje del usuario, 
-        debes determinar cuál es el próximo Agente a invocar utilizando tu herramienta de enrutamiento, o devolver el resultado final.
-        
-        Tus opciones válidas son: ["Analista", "Evaluador", "Mediador", "Finalizar"]
-        
-        Reglas estrictas de enrutamiento (EVITA BUCLES INFINITOS):
-        1. Si 'analisis_conductual' está vacío -> Llama al "Analista".
-        2. Si 'analisis_conductual' tiene datos, pero 'resultado_rag_reglamento' está vacío -> Llama al "Evaluador".
-        3. Si 'resultado_rag_reglamento' tiene datos, pero 'dictamen_final' está vacío -> Llama al "Mediador".
-        4. Si 'dictamen_final' tiene datos -> Llama a "Finalizar" de inmediato.
-        
-        NUNCA vuelvas a llamar a un agente si la tarea de su etapa ya se cumplió.
-        """
-        self.tools = [{
-            "type": "function",
-            "function": {
-                "name": "handoff",
-                "description": "Enruta la petición al siguiente agente especializado.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "target_agent": {"type": "string", "enum": ["Analista", "Evaluador", "Mediador", "Finalizar"]}
-                    },
-                    "required": ["target_agent"]
-                }
-            }
-        }]
+
+    @staticmethod
+    def _determinar_siguiente_agente(state: SharedState) -> str:
+        if not state.analisis_conductual:
+            return "Analista"
+        if not state.resultado_rag_reglamento:
+            return "Evaluador"
+        if not state.dictamen_final:
+            return "Mediador"
+        return "Finalizar"
 
     def ejecutar(self, state: SharedState, mensaje: str = None) -> SharedState:
-        # Se requiere orquestar repetidamente hasta Finalizar
         while True:
-            print(f"\n[ORQUESTADOR] Evaluando estado. analisis_conductual={bool(state.analisis_conductual)}, resultado_rag={bool(state.resultado_rag_reglamento)}, dictamen={bool(state.dictamen_final)}")
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": f"Mensaje usuario: {mensaje}\nSharedState:\n{state.model_dump_json(indent=2)}"}
-            ]
+            target_agent = self._determinar_siguiente_agente(state)
+            print(f"\n[ORQUESTADOR] Estado → analisis={bool(state.analisis_conductual)}, "
+                  f"rag={bool(state.resultado_rag_reglamento)}, dictamen={bool(state.dictamen_final)}")
+            print(f"[ORQUESTADOR] Routing determinístico → {target_agent}")
 
-            response = self.client.chat.completions.create(
-                model="gemini-2.5-flash-lite",
-                messages=messages,
-                tools=self.tools,
-                tool_choice={"type": "function", "function": {"name": "handoff"}},
-                temperature=0.0
-            )
-
-            msg = response.choices[0].message
-            target_agent = "Finalizar"
-            if msg.tool_calls:
-                args = json.loads(msg.tool_calls[0].function.arguments)
-                target_agent = args.get("target_agent", "Finalizar")
-                
-            print(f"[ORQUESTADOR] Decidió redirigir a: {target_agent}")
-            
             state.estado_actual = target_agent
 
             if target_agent == "Finalizar":
@@ -77,5 +35,5 @@ class OrquestadorAgent:
             elif target_agent == "Mediador":
                 print("==> Transfiriendo a Agente Mediador...")
                 state = MediadorAgent().ejecutar(state, mensaje)
-            
+
         return state
