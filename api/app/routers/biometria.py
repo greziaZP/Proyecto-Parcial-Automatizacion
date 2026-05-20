@@ -29,26 +29,6 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class EstudianteSinRostro(BaseModel):
-    uid: str
-    nombres: str
-    apellidos: str
-
-class RegistroRostroResponse(BaseModel):
-    success: bool
-    estudiante_id: str
-    face_id: str
-    estudiante_uid: str
-
-class IngresoResponse(BaseModel):
-    success: bool
-    mensaje: str
-    estudiante_uid: str
-    nombres: str
-    apellidos: str
-    estado_ingreso: str
-    hora_llegada: str
-
 # ─── Cliente AWS Rekognition ──────────────────────────────────────────────────
 rekognition = boto3.client(
     "rekognition",
@@ -91,6 +71,25 @@ class RegistrarBiometriaRequest(BaseModel):
 
 class ReconocerRostroRequest(BaseModel):
     imagen_base64: str
+
+class EstudianteSinRostro(BaseModel):
+    uid: str
+    nombres: str
+    apellidos: str
+
+class RegistroRostroResponse(BaseModel):
+    success: bool
+    estudiante_uid: str
+    face_id: str
+
+class IngresoResponse(BaseModel):
+    success: bool
+    mensaje: str
+    estudiante_uid: str
+    nombres: str
+    apellidos: str
+    estado_ingreso: str
+    hora_llegada: str
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ROUTER PRINCIPAL — Biometría
@@ -161,7 +160,7 @@ async def registrar_rostro(
         response = rekognition.index_faces(
             CollectionId=COLLECTION_ID,
             Image={"Bytes": imagen_bytes},
-            ExternalImageId=str(estudiante_uid),
+            ExternalImageId=estudiante_uid,
             MaxFaces=1,
             QualityFilter="AUTO",
             DetectionAttributes=["DEFAULT"],
@@ -184,10 +183,17 @@ async def registrar_rostro(
     face_id = face_records[0]["Face"]["FaceId"]
     logger.info(f"Biometría enrolada: estudiante_uid={estudiante_uid}, face_id={face_id}")
 
+    # ── Guardar face_id en la base de datos ──────────────────────────────
+    with db_cursor() as cur:
+        cur.execute(
+            "UPDATE estudiante SET rekognition_face_id = %s WHERE uid = %s;",
+            (face_id, estudiante_uid),
+        )
+
     # Nodo "Confirmar enrolamiento"
     return {
         "success": True,
-        "estudiante_id": str(estudiante_uid),
+
         "face_id": face_id,
         "estudiante_uid": estudiante_uid,
     }

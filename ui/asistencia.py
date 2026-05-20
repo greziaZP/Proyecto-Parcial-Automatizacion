@@ -10,6 +10,7 @@ import os
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,6 +23,95 @@ def _safe_json(response: requests.Response) -> dict | None:
         return response.json()
     except ValueError:
         return None
+
+
+# ─── Chatbot HTML (inyectado en la pestaña Padres) ───────────────────────────
+CHATBOT_HTML = """
+<script>
+const parent = window.parent.document;
+if (!parent.getElementById("chatbot-container")) {
+    const style = parent.createElement("style");
+    style.id = "chatbot-style";
+    style.innerHTML = `
+        #chatbot-container { position: fixed; bottom: 24px; right: 24px; z-index: 999999; display: flex; flex-direction: column; align-items: flex-end; font-family: 'Inter', sans-serif; }
+        @media (min-width: 768px) { #chatbot-container { bottom: 32px; right: 32px; } }
+        #chat-window { width: 320px; height: 500px; background: rgba(33,49,69,0.95); backdrop-filter: blur(24px); border: 1px solid rgba(0,204,249,0.3); border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); display: flex; flex-direction: column; overflow: hidden; transition: all 0.3s ease; transform-origin: bottom right; margin-bottom: 16px; }
+        @media (min-width: 768px) { #chat-window { width: 384px; } }
+        #chat-window.hidden { display: none; transform: scale(0.95); opacity: 0; }
+        #chat-window.show { display: flex; transform: scale(1); opacity: 1; }
+        .chat-header { padding: 16px; background: rgba(0,204,249,0.1); border-bottom: 1px solid rgba(0,204,249,0.2); display: flex; align-items: center; justify-content: space-between; }
+        .chat-title-wrapper { display: flex; align-items: center; gap: 8px; }
+        .chat-title { font-size: 14px; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: #00ccf9; text-transform: uppercase; letter-spacing: 0.05em; }
+        .chat-close-btn { background: transparent; border: none; color: rgba(0,204,249,0.7); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .chat-close-btn:hover { color: #00ccf9; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+        .chat-message { max-width: 85%; padding: 12px; font-size: 14px; line-height: 1.5; border-radius: 16px; word-break: break-word; }
+        .chat-message.bot { background: rgba(0,204,249,0.2); color: #f8f7ff; border: 1px solid rgba(0,204,249,0.1); border-top-left-radius: 4px; align-self: flex-start; }
+        .chat-message.user { background: #00ccf9; color: #001f28; border-top-right-radius: 4px; align-self: flex-end; }
+        .chat-message.error { background: rgba(186,26,26,0.2); color: #ffdad6; border: 1px solid rgba(186,26,26,0.3); border-top-left-radius: 4px; align-self: flex-start; }
+        .chat-input-area { padding: 16px; background: #213145; border-top: 1px solid rgba(0,204,249,0.2); display: flex; flex-direction: column; gap: 12px; }
+        .attachment-options { background: rgba(229,238,255,0.1); border-radius: 8px; border: 1px solid rgba(0,204,249,0.2); padding: 8px; display: none; flex-direction: column; gap: 4px; }
+        .attachment-options.show { display: flex; }
+        .attach-btn { display: flex; align-items: center; gap: 12px; padding: 8px 12px; font-size: 14px; color: #00ccf9; background: transparent; border: none; border-radius: 6px; cursor: pointer; text-align: left; }
+        .attach-btn:hover { background: rgba(0,204,249,0.1); }
+        .attach-btn input[type="file"] { display: none; }
+        .input-row { display: flex; align-items: center; gap: 8px; }
+        .add-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,204,249,0.1); color: #00ccf9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+        .add-btn:hover { background: rgba(0,204,249,0.2); }
+        .msg-input { flex: 1; background: rgba(229,238,255,0.05); border: 1px solid rgba(0,204,249,0.2); border-radius: 999px; padding: 8px 16px; color: #f8f7ff; font-size: 14px; outline: none; }
+        .msg-input::placeholder { color: rgba(0,204,249,0.4); }
+        .msg-input:focus { border-color: #00ccf9; box-shadow: 0 0 0 1px #00ccf9; }
+        .send-btn { width: 40px; height: 40px; border-radius: 50%; background: #00ccf9; color: #001f28; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+        .send-btn:hover { background: #4cd6ff; }
+        #chat-fab { width: 56px; height: 56px; background: #00ccf9; color: #001f28; border: none; border-radius: 50%; box-shadow: 0 8px 32px rgba(0,204,249,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.3s ease; }
+        #chat-fab:hover { transform: scale(1.1); }
+        #chat-fab:active { transform: scale(0.95); }
+        #chat-fab .material-symbols-outlined { font-size: 28px; transition: transform 0.3s ease; }
+        #chat-fab:hover .material-symbols-outlined { transform: rotate(12deg); }
+    `;
+    parent.head.appendChild(style);
+    const container = parent.createElement("div");
+    container.id = "chatbot-container";
+    container.innerHTML = `
+<div id="chat-window" class="hidden">
+<div class="chat-header"><div class="chat-title-wrapper"><span class="material-symbols-outlined" style="color:#00ccf9;">smart_toy</span><span class="chat-title">Asistente Virtual</span></div><button class="chat-close-btn" id="chat-close"><span class="material-symbols-outlined">close</span></button></div>
+<div class="chat-messages" id="chat-messages"><div class="chat-message bot">Hola. Soy el asistente inteligente. \u00bfEn qu\u00e9 puedo ayudarte hoy?</div></div>
+<div class="chat-input-area">
+<div class="attachment-options" id="attachment-options"><label class="attach-btn"><span class="material-symbols-outlined">image</span> Subir Foto<input type="file" id="file-foto" accept="image/png, image/jpeg" /></label><label class="attach-btn"><span class="material-symbols-outlined">picture_as_pdf</span> Subir PDF<input type="file" id="file-pdf" accept="application/pdf" /></label></div>
+<div class="input-row"><button class="add-btn" id="attach-toggle"><span class="material-symbols-outlined">add</span></button><input type="text" class="msg-input" id="chat-input" placeholder="Escribe un mensaje..." /><button class="send-btn" id="chat-send"><span class="material-symbols-outlined">send</span></button></div>
+</div></div>
+<button id="chat-fab"><span class="material-symbols-outlined">smart_toy</span></button>
+    `;
+    parent.body.appendChild(container);
+    const API_BASE = '__API_BASE__';
+    const chatWindow = parent.getElementById('chat-window');
+    const chatFab = parent.getElementById('chat-fab');
+    const chatClose = parent.getElementById('chat-close');
+    const attachToggle = parent.getElementById('attach-toggle');
+    const attachmentOptions = parent.getElementById('attachment-options');
+    const chatMessages = parent.getElementById('chat-messages');
+    const chatInput = parent.getElementById('chat-input');
+    const chatSend = parent.getElementById('chat-send');
+    const fileFoto = parent.getElementById('file-foto');
+    const filePdf = parent.getElementById('file-pdf');
+    function toggleChat() { if (chatWindow.classList.contains('hidden')) { chatWindow.classList.remove('hidden'); chatWindow.classList.add('show'); } else { chatWindow.classList.remove('show'); chatWindow.classList.add('hidden'); attachmentOptions.classList.remove('show'); } }
+    chatFab.addEventListener('click', toggleChat);
+    chatClose.addEventListener('click', toggleChat);
+    attachToggle.addEventListener('click', () => { attachmentOptions.classList.toggle('show'); });
+    let pendingFile = null;
+    function addMessage(text, sender) { const d = parent.createElement('div'); d.className = 'chat-message ' + sender; d.textContent = text; chatMessages.appendChild(d); chatMessages.scrollTop = chatMessages.scrollHeight; }
+    function showTyping() { const d = parent.createElement('div'); d.className = 'chat-message bot'; d.id = 'typing-indicator'; d.textContent = 'Escribiendo...'; d.style.opacity = '0.6'; d.style.fontStyle = 'italic'; chatMessages.appendChild(d); chatMessages.scrollTop = chatMessages.scrollHeight; }
+    function removeTyping() { const t = parent.getElementById('typing-indicator'); if (t) t.remove(); }
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    function handleFile(file, type) { attachmentOptions.classList.remove('show'); if (!file) return; if (file.size > MAX_FILE_SIZE) { addMessage('Error: Archivo supera 5MB.', 'error'); return; } if (type === 'foto' && !['image/jpeg','image/png'].includes(file.type)) { addMessage('Error: No es imagen valida.', 'error'); return; } if (type === 'pdf' && file.type !== 'application/pdf') { addMessage('Error: No es PDF valido.', 'error'); return; } pendingFile = file; addMessage('Archivo adjunto: ' + file.name, 'user'); }
+    fileFoto.addEventListener('change', (e) => { handleFile(e.target.files[0], 'foto'); e.target.value = ''; });
+    filePdf.addEventListener('change', (e) => { handleFile(e.target.files[0], 'pdf'); e.target.value = ''; });
+    async function sendMessage() { const text = chatInput.value.trim(); if (!text && !pendingFile) return; if (text) { addMessage(text, 'user'); chatInput.value = ''; } showTyping(); const fd = new FormData(); fd.append('mensaje', text || '(archivo adjunto)'); fd.append('alumno_id', 'b319354c-d876-4231-a69c-97e87c776646'); fd.append('padre_id', '888f7f70-14aa-4310-8775-7f8d609f8745'); fd.append('tipo_flujo', 'JUSTIFICACION_MEDICA'); if (pendingFile) { fd.append('adjunto', pendingFile); pendingFile = null; } try { const resp = await fetch(API_BASE + '/justificaciones/chat', { method: 'POST', body: fd }); removeTyping(); if (!resp.ok) { const e = await resp.json().catch(() => null); addMessage((e && e.detail) || 'Error ' + resp.status, 'error'); return; } const data = await resp.json(); if (data.mensaje_respuesta) { addMessage(data.mensaje_respuesta, 'bot'); } else if (data.dictamen_final) { addMessage(data.dictamen_final, 'bot'); } else { addMessage(JSON.stringify(data, null, 2), 'bot'); } } catch(err) { removeTyping(); addMessage('No se pudo conectar con el servidor.', 'error'); } }
+    chatSend.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+}
+</script>
+""".replace('__API_BASE__', API_BASE)
 
 # ─── Configuración de la página ──────────────────────────────────────────────
 st.set_page_config(
@@ -311,25 +401,27 @@ if isinstance(raw_tab, list):
     active_tab = raw_tab[0] if raw_tab else "ingreso"
 else:
     active_tab = raw_tab
-active_tab = active_tab if active_tab in {"ingreso", "registro"} else "ingreso"
+active_tab = active_tab if active_tab in {"ingreso", "registro", "padres"} else "ingreso"
 
 nav_ingreso = "nav-link active" if active_tab == "ingreso" else "nav-link"
 nav_registro = "nav-link active" if active_tab == "registro" else "nav-link"
+nav_padres = "nav-link active" if active_tab == "padres" else "nav-link"
 
 st.markdown(
     f"""
-    <div class="app-shell">
-        <div class="topbar">
-            <div class="brand">
-                <span class="material-symbols-outlined">fingerprint</span>
-                <span>COLEGIO NARVAES</span>
-            </div>
-            <div class="nav-links">
-                <a class="{nav_ingreso}" href="?tab=ingreso" target="_self">Escanear</a>
-                <a class="{nav_registro}" href="?tab=registro" target="_self">Registrar</a>
-            </div>
-        </div>
-    </div>
+<div class="app-shell">
+<div class="topbar">
+<div class="brand">
+<span class="material-symbols-outlined">fingerprint</span>
+<span>COLEGIO NARVAES</span>
+</div>
+<div class="nav-links">
+<a class="{nav_ingreso}" href="?tab=ingreso" target="_self">Escanear</a>
+<a class="{nav_registro}" href="?tab=registro" target="_self">Registrar</a>
+<a class="{nav_padres}" href="?tab=padres" target="_self">Padres</a>
+</div>
+</div>
+</div>
     """,
     unsafe_allow_html=True,
 )
@@ -599,3 +691,29 @@ if active_tab == "ingreso":
         )
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 3: Portal para Padres
+# ─────────────────────────────────────────────────────────────────────────────
+
+if active_tab == "padres":
+    st.markdown("<div class=\"app-shell\">", unsafe_allow_html=True)
+    st.markdown(
+        """
+<div class="panel" style="text-align:center; min-height:400px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-top:20px;">
+<div class="section-title">Portal para Padres</div>
+<div class="section-subtitle">Bienvenido al portal para padres. Aqui podras interactuar con el asistente virtual.</div>
+<span class="material-symbols-outlined" style="font-size:64px; color:var(--outline); margin-top:20px;">family_restroom</span>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─── Renderizar Chatbot ──────────────────────────────────────────────────────
+if active_tab == "padres":
+    components.html(CHATBOT_HTML, height=0)
+else:
+    components.html("""<script>const p=window.parent.document;const c=p.getElementById('chatbot-container');if(c)c.remove();const s=p.getElementById('chatbot-style');if(s)s.remove();</script>""", height=0)
