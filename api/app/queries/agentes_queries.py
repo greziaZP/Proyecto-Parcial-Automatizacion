@@ -4,7 +4,7 @@ from datetime import date
 import psycopg2
 from psycopg2.extras import RealDictCursor, register_uuid
 from psycopg2.extensions import adapt
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 register_uuid()
 
@@ -15,7 +15,6 @@ def _coerce_uuid(value):
         return str(value)
     return str(value)
 
-# Función local para obtener conexión a PostgreSQL
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("POSTGRES_HOST") or os.getenv("PG_HOST", "localhost"),
@@ -26,14 +25,9 @@ def get_db_connection():
     )
 
 def query_historial_estudiante(estudiante_uid: str) -> Dict[str, Any]:
-    """
-    Trae las últimas 10 faltas/tardanzas desde asistencia_clase y 
-    los acumulados desde nota_actitudinal cruzando por matricula.
-    """
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 1. Traer últimas 10 inasistencias/tardanzas
             cur.execute("""
                 SELECT fecha_asistencia, estado_asistencia, observacion_docente
                 FROM asistencia_clase
@@ -44,7 +38,6 @@ def query_historial_estudiante(estudiante_uid: str) -> Dict[str, Any]:
             """, (estudiante_uid,))
             faltas = cur.fetchall()
 
-            # 2. Traer acumulados del periodo de notas
             cur.execute("""
                 SELECT n.total_tardanzas, n.total_inasistencias, n.total_fugas, n.promedio_academico
                 FROM nota_actitudinal n
@@ -77,10 +70,6 @@ def _normalizar_tipo_justificacion(valor: str) -> str:
     return _TIPO_JUSTIFICACION_MAP.get(valor, 'otra')
 
 def query_upsert_justificacion(datos_justificacion: dict) -> str:
-    """
-    Inserta una justificacion formal con los datos recibidos.
-    Retorna el uid generado.
-    """
     tipo = _normalizar_tipo_justificacion(
         datos_justificacion.get('tipo_justificacion', 'otra')
     )
@@ -127,10 +116,6 @@ def query_upsert_justificacion(datos_justificacion: dict) -> str:
         conn.close()
 
 def query_insert_citacion(datos_citacion: dict) -> str:
-    """
-    Inserta el registro de citación en PostgreSQL.
-    Retorna el uid generado.
-    """
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -167,5 +152,130 @@ def query_insert_citacion(datos_citacion: dict) -> str:
     except Exception as e:
         conn.rollback()
         raise e
+    finally:
+        conn.close()
+
+def _serializar_justificacion(fila: dict) -> dict:
+    out = {}
+    for k, v in fila.items():
+        if isinstance(v, _uuid.UUID):
+            out[k] = str(v)
+        elif hasattr(v, 'isoformat'):
+            out[k] = v.isoformat()
+        else:
+            out[k] = v
+    out["estudiante_nombre_completo"] = None
+    if fila.get("estudiante_nombres") and fila.get("estudiante_apellidos"):
+        out["estudiante_nombre_completo"] = f"{fila['estudiante_nombres']} {fila['estudiante_apellidos']}"
+    out["padre_nombre_completo"] = None
+    if fila.get("padre_nombres") and fila.get("padre_apellidos"):
+        out["padre_nombre_completo"] = f"{fila['padre_nombres']} {fila['padre_apellidos']}"
+    return out
+
+def query_listar_justificaciones() -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    j.uid,
+                    j.tipo_justificacion,
+                    j.estado_justificacion,
+                    j.fecha_presentacion,
+                    j.fecha_inicio_incidencia,
+                    j.fecha_fin_incidencia,
+                    j.descripcion_motivo,
+                    j.creado_en,
+                    e.uid AS estudiante_uid,
+                    e.nombres AS estudiante_nombres,
+                    e.apellidos AS estudiante_apellidos,
+                    pf.uid AS padre_uid,
+                    pf.nombres AS padre_nombres,
+                    pf.apellidos AS padre_apellidos
+                FROM justificacion j
+                JOIN padre_familia pf ON j.padre_solicitante_uid = pf.uid
+                LEFT JOIN asistencia_clase ac ON j.asistencia_clase_uid = ac.uid
+                LEFT JOIN estudiante e ON ac.estudiante_uid = e.uid
+                ORDER BY j.creado_en DESC;
+            """)
+            filas = cur.fetchall()
+            if not filas:
+                cur.execute("""
+                    SELECT
+                        j.uid,
+                        j.tipo_justificacion,
+                        j.estado_justificacion,
+                        j.fecha_presentacion,
+                        j.fecha_inicio_incidencia,
+                        j.fecha_fin_incidencia,
+                        j.descripcion_motivo,
+                        j.creado_en,
+                        NULL AS estudiante_uid,
+                        NULL AS estudiante_nombres,
+                        NULL AS estudiante_apellidos,
+                        pf.uid AS padre_uid,
+                        pf.nombres AS padre_nombres,
+                        pf.apellidos AS padre_apellidos
+                    FROM justificacion j
+                    JOIN padre_familia pf ON j.padre_solicitante_uid = pf.uid
+                    ORDER BY j.creado_en DESC;
+                """)
+                filas = cur.fetchall()
+            return [_serializar_justificacion(dict(f)) for f in filas]
+    finally:
+        conn.close()
+
+def query_detalle_justificacion(uid: str) -> Dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    j.uid,
+                    j.tipo_justificacion,
+                    j.estado_justificacion,
+                    j.fecha_presentacion,
+                    j.fecha_inicio_incidencia,
+                    j.fecha_fin_incidencia,
+                    j.descripcion_motivo,
+                    j.url_documento_referencia,
+                    j.creado_en,
+                    e.uid AS estudiante_uid,
+                    e.nombres AS estudiante_nombres,
+                    e.apellidos AS estudiante_apellidos,
+                    pf.uid AS padre_uid,
+                    pf.nombres AS padre_nombres,
+                    pf.apellidos AS padre_apellidos
+                FROM justificacion j
+                JOIN padre_familia pf ON j.padre_solicitante_uid = pf.uid
+                LEFT JOIN asistencia_clase ac ON j.asistencia_clase_uid = ac.uid
+                LEFT JOIN estudiante e ON ac.estudiante_uid = e.uid
+                WHERE j.uid = %s;
+            """, (uid,))
+            fila = cur.fetchone()
+            if not fila:
+                cur.execute("""
+                    SELECT
+                        j.uid,
+                        j.tipo_justificacion,
+                        j.estado_justificacion,
+                        j.fecha_presentacion,
+                        j.fecha_inicio_incidencia,
+                        j.fecha_fin_incidencia,
+                        j.descripcion_motivo,
+                        j.url_documento_referencia,
+                        j.creado_en,
+                        NULL AS estudiante_uid,
+                        NULL AS estudiante_nombres,
+                        NULL AS estudiante_apellidos,
+                        pf.uid AS padre_uid,
+                        pf.nombres AS padre_nombres,
+                        pf.apellidos AS padre_apellidos
+                    FROM justificacion j
+                    JOIN padre_familia pf ON j.padre_solicitante_uid = pf.uid
+                    WHERE j.uid = %s;
+                """, (uid,))
+                fila = cur.fetchone()
+            return _serializar_justificacion(dict(fila)) if fila else {}
     finally:
         conn.close()
