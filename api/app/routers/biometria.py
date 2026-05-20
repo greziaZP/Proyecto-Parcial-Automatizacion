@@ -1,23 +1,28 @@
 """
 Router: Biometría + Recursos REST
 ==================================
-Flujos n8n implementados:
-  POST /biometria/registrar  → Nodo "AWS Rekognition (IndexFaces)"
-  GET  /alumnos              → Nodo "GET Alumnos → Obtener Alumnos"
-  GET  /cursos               → Nodo "GET Cursos → Obtener Cursos"
-  GET  /profesores           → Nodo "GET Profesores → Obtener Profesores"
+Endpoints principales:
+  GET  /biometria/estudiantes_sin_rostro → Estudiantes sin enrolamiento facial
+  POST /biometria/registrar_rostro       → Enrolar rostro en AWS Rekognition
+  POST /biometria/marcar_ingreso         → Identificar alumno y registrar ingreso
+
+Endpoints REST heredados:
+  GET  /alumnos    → Listar alumnos
+  GET  /cursos     → Listar cursos
+  GET  /profesores → Listar profesores
 """
 
-import base64
 import logging
 import os
-import psycopg2
+from datetime import datetime, time
 
 import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
+
+from db import db_cursor
 
 load_dotenv()
 
@@ -31,187 +36,305 @@ rekognition = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
 )
 
-COLLECTION_ID        = os.getenv("REKOGNITION_COLLECTION_ID", "colegio-faces")
+COLLECTION_ID = os.getenv("REKOGNITION_COLLECTION_ID", "colegio_faces")
+
+
+def _ensure_collection_exists(collection_id: str) -> None:
+    try:
+        rekognition.describe_collection(CollectionId=collection_id)
+    except rekognition.exceptions.ResourceNotFoundException:
+        try:
+            rekognition.create_collection(CollectionId=collection_id)
+            logger.info("Rekognition collection creada: %s", collection_id)
+        except ClientError as e:
+            logger.error("No se pudo crear la coleccion Rekognition: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No se pudo crear la coleccion de Rekognition. Verifique credenciales y permisos.",
+            )
+    except ClientError as e:
+        logger.error("Error al verificar coleccion Rekognition: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No se pudo verificar la coleccion de Rekognition. Intente nuevamente.",
+        )
 SIMILARITY_THRESHOLD = float(os.getenv("REKOGNITION_SIMILARITY_THRESHOLD", "90.0"))
+HORA_LIMITE = time(8, 0, 0)  # 08:00 AM — umbral puntualidad
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
 
-class RegistrarBiometriaRequest(BaseModel):
-    alumno_id: int
-    imagen_base64: str  # Foto frontal del alumno, sin prefijo "data:image/..."
+# ─── Schemas Pydantic ─────────────────────────────────────────────────────────
 
-class ReconocerRostroRequest(BaseModel):
-    imagen_base64: str
+class EstudianteSinRostro(BaseModel):
+    uid: str
+    nombres: str
+    apellidos: str
+
+
+class RegistroRostroResponse(BaseModel):
+    success: bool
+    mensaje: str
+    face_id: str
+    estudiante_uid: str
+
+
+class IngresoResponse(BaseModel):
+    success: bool
+    mensaje: str
+    estudiante_uid: str
+    nombres: str
+    apellidos: str
+    estado_ingreso: str
+    hora_llegada: str
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FLUJO 1: Registro de Biometría
-# n8n: Webhook → AWS Rekognition (IndexFaces) → HTTP Request → Code JS → Confirmar
+# ROUTER PRINCIPAL — Biometría
 # ─────────────────────────────────────────────────────────────────────────────
 
 router_biometria = APIRouter(prefix="/biometria", tags=["Biometría"])
 
 
-@router_biometria.post(
-    "/registrar",
-    status_code=status.HTTP_201_CREATED,
-    summary="Enrolar biometría facial de un alumno (IndexFaces)",
+# ── GET /biometria/estudiantes_sin_rostro ────────────────────────────────────
+
+@router_biometria.get(
+    "/estudiantes_sin_rostro",
+    response_model=list[EstudianteSinRostro],
+    summary="Listar estudiantes sin rostro registrado",
 )
-def registrar_biometria(payload: RegistrarBiometriaRequest):
+def estudiantes_sin_rostro():
     """
-    Recibe la foto del alumno en Base64 y la indexa en la colección de
-    AWS Rekognition usando IndexFaces.
-    Guarda el face_id devuelto para usarlo luego en el reconocimiento.
+    Devuelve todos los estudiantes cuyo campo `rekognition_face_id` es NULL,
+    es decir, que aún no han sido enrolados en AWS Rekognition.
     """
-    # Nodo "Decodifica Base64"
-    try:
-        imagen_bytes = base64.b64decode(payload.imagen_base64)
-    except Exception:
+    with db_cursor() as cur:
+        cur.execute(
+            "SELECT uid, nombres, apellidos "
+            "FROM estudiante "
+            "WHERE rekognition_face_id IS NULL;"
+        )
+        filas = cur.fetchall()
+
+    # RealDictCursor devuelve dicts; convertimos uid a str por si es UUID nativo
+    return [
+        {
+            "uid": str(f["uid"]),
+            "nombres": f["nombres"],
+            "apellidos": f["apellidos"],
+        }
+        for f in filas
+    ]
+
+
+# ── POST /biometria/registrar_rostro ─────────────────────────────────────────
+
+@router_biometria.post(
+    "/registrar_rostro",
+    response_model=RegistroRostroResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Enrolar biometría facial de un estudiante (IndexFaces)",
+)
+async def registrar_rostro(
+    archivo: UploadFile = File(..., description="Foto frontal del estudiante"),
+    estudiante_uid: str = Form(..., description="UID (UUID) del estudiante"),
+):
+    """
+    Recibe la foto del estudiante como UploadFile y la indexa en la colección
+    de AWS Rekognition. Guarda el `FaceId` devuelto en la tabla `estudiante`.
+    """
+    imagen_bytes = await archivo.read()
+
+    if not imagen_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La imagen no es un Base64 válido.",
+            detail="El archivo de imagen está vacío.",
         )
 
-    # Nodo "AWS Rekognition (IndexFaces)"
+    # ── Indexar rostro en AWS Rekognition ─────────────────────────────────
+    _ensure_collection_exists(COLLECTION_ID)
     try:
         response = rekognition.index_faces(
             CollectionId=COLLECTION_ID,
             Image={"Bytes": imagen_bytes},
-            ExternalImageId=str(payload.alumno_id),
+            ExternalImageId=estudiante_uid,
             MaxFaces=1,
             QualityFilter="AUTO",
             DetectionAttributes=["DEFAULT"],
         )
     except ClientError as e:
-        logger.error(f"Error AWS Rekognition IndexFaces: {e}")
+        logger.error("Error AWS Rekognition IndexFaces: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al comunicarse con AWS Rekognition: {e.response['Error']['Message']}",
         )
 
     face_records = response.get("FaceRecords", [])
-
-    # Nodo "Code in JavaScript": validar si se detectó cara
     if not face_records:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No se detectó ninguna cara en la imagen. Use una foto frontal con buena iluminación.",
+            detail="No se detectó ningún rostro en la imagen. "
+                   "Use una foto frontal con buena iluminación.",
         )
 
     face_id = face_records[0]["Face"]["FaceId"]
-    logger.info(f"Biometría enrolada: alumno_id={payload.alumno_id}, face_id={face_id}")
 
-    # Nodo "Confirmar enrolamiento"
+    # ── Persistir face_id en PostgreSQL ──────────────────────────────────
+    with db_cursor() as cur:
+        cur.execute(
+            "UPDATE estudiante SET rekognition_face_id = %s WHERE uid = %s;",
+            (face_id, estudiante_uid),
+        )
+
+    logger.info(
+        "Rostro enrolado: estudiante_uid=%s, face_id=%s",
+        estudiante_uid, face_id,
+    )
+
     return {
         "success": True,
-        "alumno_id": payload.alumno_id,
+        "mensaje": f"Rostro registrado exitosamente. FaceId: {face_id}",
         "face_id": face_id,
-        "mensaje": f"Biometría registrada exitosamente. face_id: {face_id}",
+        "estudiante_uid": estudiante_uid,
     }
 
 
+# ── POST /biometria/marcar_ingreso ───────────────────────────────────────────
+
 @router_biometria.post(
-    "/reconocer_rostro",
-    status_code=status.HTTP_200_OK,
-    summary="Reconoce un rostro en base64 y registra su ingreso",
+    "/marcar_ingreso",
+    response_model=IngresoResponse,
+    summary="Identificar alumno por rostro y registrar ingreso",
 )
-def reconocer_rostro(payload: ReconocerRostroRequest):
+async def marcar_ingreso(
+    archivo: UploadFile = File(..., description="Foto capturada en la puerta del colegio"),
+):
     """
-    Decodifica el base64, busca el rostro en Rekognition e inserta el 
-    registro_ingreso real en PostgreSQL.
+    Recibe la imagen capturada en la puerta del colegio, busca coincidencia
+    en AWS Rekognition, determina puntualidad y registra el ingreso en la BD.
     """
-    try:
-        imagen_bytes = base64.b64decode(payload.imagen_base64)
-    except Exception:
+    imagen_bytes = await archivo.read()
+
+    if not imagen_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La imagen no es un Base64 válido."
+            detail="El archivo de imagen está vacío.",
         )
-        
+
+    # ── Buscar rostro en la colección de Rekognition ─────────────────────
+    _ensure_collection_exists(COLLECTION_ID)
     try:
         response = rekognition.search_faces_by_image(
             CollectionId=COLLECTION_ID,
-            Image={'Bytes': imagen_bytes},
+            Image={"Bytes": imagen_bytes},
+            MaxFaces=1,
             FaceMatchThreshold=SIMILARITY_THRESHOLD,
-            MaxFaces=1
+        )
+    except rekognition.exceptions.InvalidParameterException:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No se detectó ningún rostro en la imagen proporcionada.",
         )
     except ClientError as e:
-        logger.error(f"Error AWS Rekognition SearchFacesByImage: {e}")
+        logger.error("Error AWS Rekognition SearchFacesByImage: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Error al comunicarse con AWS Rekognition: {e.response['Error']['Message']}"
+            detail=f"Error al comunicarse con AWS Rekognition: {e.response['Error']['Message']}",
         )
 
     face_matches = response.get("FaceMatches", [])
     if not face_matches:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Rostro no reconocido."
+            detail="Rostro no reconocido. Verifique que el alumno esté enrolado.",
         )
 
-    # Obtenemos el ExternalImageId que se guardó al enrolar (uuid del estudiante)
-    estudiante_uid = face_matches[0]["Face"].get("ExternalImageId")
-    if not estudiante_uid:
+    face_id_match = face_matches[0]["Face"]["FaceId"]
+
+    # ── Buscar al estudiante en PostgreSQL ───────────────────────────────
+    with db_cursor() as cur:
+        cur.execute(
+            "SELECT uid, nombres, apellidos, matricula_actual_uid "
+            "FROM estudiante "
+            "WHERE rekognition_face_id = %s;",
+            (face_id_match,),
+        )
+        estudiante = cur.fetchone()
+
+    if not estudiante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El rostro fue reconocido por AWS pero no se encontró "
+                   "un estudiante asociado en la base de datos.",
+        )
+
+    estudiante_uid = str(estudiante["uid"])
+    nombres = estudiante["nombres"]
+    apellidos = estudiante["apellidos"]
+    matricula_uid = estudiante["matricula_actual_uid"]
+
+    if not matricula_uid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El rostro reconocido no tiene un ExternalImageId válido asociado."
+            detail=f"El estudiante {nombres} {apellidos} no tiene una matrícula activa.",
         )
 
-    # Conectar a PostgreSQL para insertar la asistencia
-    # Nota: extraemos "matricula_actual_uid" para respetar el NOT NULL de la DB
-    try:
-        conn = psycopg2.connect(
-            host=os.getenv("POSTGRES_HOST", "localhost"),
-            port=os.getenv("POSTGRES_PORT", "5432"),
-            user=os.getenv("POSTGRES_USER", "postgres"),
-            password=os.getenv("POSTGRES_PASSWORD", "mysecretpassword"),
-            dbname=os.getenv("POSTGRES_DB", "defaultdb")
+    # ── Calcular estado de ingreso ───────────────────────────────────────
+    ahora = datetime.now()
+    estado_ingreso = "a_tiempo" if ahora.time() <= HORA_LIMITE else "tardanza"
+
+    # ── Insertar registro de ingreso ─────────────────────────────────────
+    with db_cursor() as cur:
+        cur.execute(
+            "INSERT INTO registro_ingreso "
+            "(matricula_uid, estudiante_uid, fecha_ingreso, hora_llegada, estado_ingreso) "
+            "VALUES (%s, %s, CURRENT_DATE, CURRENT_TIMESTAMP, %s) "
+            "ON CONFLICT (matricula_uid, fecha_ingreso) DO NOTHING "
+            "RETURNING hora_llegada, estado_ingreso;",
+            (str(matricula_uid), estudiante_uid, estado_ingreso),
         )
-        with conn.cursor() as cur:
-            # 1. Obtener la matrícula activa
-            cur.execute("""
-                SELECT matricula_actual_uid 
-                FROM estudiante 
-                WHERE uid = %s;
-            """, (estudiante_uid,))
-            res = cur.fetchone()
-            if not res or not res[0]:
+        inserted = cur.fetchone()
+
+        if inserted:
+            hora_llegada = inserted["hora_llegada"]
+            estado_final = inserted["estado_ingreso"]
+            mensaje = "Registrado"
+        else:
+            cur.execute(
+                "SELECT hora_llegada, estado_ingreso "
+                "FROM registro_ingreso "
+                "WHERE matricula_uid = %s AND fecha_ingreso = CURRENT_DATE;",
+                (str(matricula_uid),),
+            )
+            previo = cur.fetchone()
+
+            if not previo:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="El estudiante no tiene una matrícula activa."
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Ya existe un registro de ingreso para hoy, pero no se pudo recuperar.",
                 )
-            matricula_uid = res[0]
 
-            # 2. Insertar el ingreso
-            cur.execute("""
-                INSERT INTO registro_ingreso (matricula_uid, estudiante_uid)
-                VALUES (%s, %s)
-                RETURNING uid;
-            """, (matricula_uid, estudiante_uid))
-            ingreso_uid = cur.fetchone()[0]
-        
-        conn.commit()
-    except Exception as e:
-        if 'conn' in locals():
-            conn.rollback()
-        logger.error(f"Error DB guardando asistencia biométrica: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno guardando la asistencia: {str(e)}"
-        )
-    finally:
-        if 'conn' in locals():
-            conn.close()
+            hora_llegada = previo["hora_llegada"]
+            estado_final = previo["estado_ingreso"]
+            mensaje = "Registrado"
+
+    hora_str = hora_llegada.strftime("%H:%M:%S")
+    logger.info(
+        "Ingreso registrado: %s %s — %s (%s)",
+        nombres, apellidos, estado_final, hora_str,
+    )
 
     return {
         "success": True,
+        "mensaje": mensaje,
         "estudiante_uid": estudiante_uid,
-        "ingreso_uid": str(ingreso_uid),
-        "mensaje": "Ingreso registrado correctamente."
+        "nombres": nombres,
+        "apellidos": apellidos,
+        "estado_ingreso": estado_final,
+        "hora_llegada": hora_str,
     }
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# FLUJO 2: Endpoints REST — Alumnos / Cursos / Profesores
-# n8n: GET Alumnos → Obtener Alumnos | GET Cursos → Obtener Cursos | etc.
+# ROUTER REST — Alumnos / Cursos / Profesores
 # ─────────────────────────────────────────────────────────────────────────────
 
 router_rest = APIRouter(tags=["REST"])
@@ -220,19 +343,22 @@ router_rest = APIRouter(tags=["REST"])
 @router_rest.get("/alumnos", summary="Listar alumnos")
 def obtener_alumnos():
     """Equivale al nodo n8n: GET Alumnos → Obtener Alumnos."""
-    # TODO: reemplazar con consulta a DB real → db.query(Alumno).all()
-    return {"mensaje": "Conectar con la base de datos PostgreSQL"}
+    with db_cursor() as cur:
+        cur.execute("SELECT uid, nombres, apellidos FROM estudiante;")
+        return cur.fetchall()
 
 
 @router_rest.get("/cursos", summary="Listar cursos")
 def obtener_cursos():
     """Equivale al nodo n8n: GET Cursos → Obtener Cursos."""
-    # TODO: reemplazar con consulta a DB real → db.query(Curso).all()
-    return {"mensaje": "Conectar con la base de datos PostgreSQL"}
+    with db_cursor() as cur:
+        cur.execute("SELECT uid, nombre FROM curso;")
+        return cur.fetchall()
 
 
 @router_rest.get("/profesores", summary="Listar profesores")
 def obtener_profesores():
     """Equivale al nodo n8n: GET Profesores → Obtener Profesores."""
-    # TODO: reemplazar con consulta a DB real → db.query(Profesor).all()
-    return {"mensaje": "Conectar con la base de datos PostgreSQL"}
+    with db_cursor() as cur:
+        cur.execute("SELECT uid, nombres, apellidos FROM docente;")
+        return cur.fetchall()

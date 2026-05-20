@@ -32,8 +32,29 @@ rekognition = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
 )
 
-COLLECTION_ID        = os.getenv("REKOGNITION_COLLECTION_ID", "colegio-faces")
+COLLECTION_ID        = os.getenv("REKOGNITION_COLLECTION_ID", "colegio_faces")
 SIMILARITY_THRESHOLD = float(os.getenv("REKOGNITION_SIMILARITY_THRESHOLD", "90.0"))
+
+
+def _ensure_collection_exists(collection_id: str) -> None:
+    try:
+        rekognition.describe_collection(CollectionId=collection_id)
+    except rekognition.exceptions.ResourceNotFoundException:
+        try:
+            rekognition.create_collection(CollectionId=collection_id)
+            logger.info("Rekognition collection creada: %s", collection_id)
+        except ClientError as e:
+            logger.error("No se pudo crear la coleccion Rekognition: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No se pudo crear la coleccion de Rekognition. Verifique credenciales y permisos.",
+            )
+    except ClientError as e:
+        logger.error("Error al verificar coleccion Rekognition: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No se pudo verificar la coleccion de Rekognition. Intente nuevamente.",
+        )
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +98,7 @@ def registrar_asistencia(payload: RegistrarAsistenciaRequest):
         )
 
     # Nodo "Reconocimiento en AWS Rekognition (SearchFacesByImage)"
+    _ensure_collection_exists(COLLECTION_ID)
     try:
         response = rekognition.search_faces_by_image(
             CollectionId=COLLECTION_ID,
