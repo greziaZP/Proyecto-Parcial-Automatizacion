@@ -55,11 +55,12 @@ load_dotenv(dotenv_path=_env_path)
 EMBED_DIM = 384          # all-MiniLM-L6-v2  →  384 dims
 
 # ── Nombres de colecciones ────────────────────────────────────────────────────
-COL_FUGAS       = "alertas_fuga"
-COL_NOTIF       = "notificaciones"
-COL_EXCEPCIONES = "excepciones_sin_resolver"
-COL_REPORTES    = "reportes_trimestrales"
-COL_CONDUCTA    = "conducta_anual"
+COL_FUGAS        = "alertas_fuga"
+COL_NOTIF        = "notificaciones"
+COL_EXCEPCIONES  = "excepciones_sin_resolver"
+COL_REPORTES     = "reportes_trimestrales"
+COL_CONDUCTA     = "conducta_anual"
+COL_REGLAMENTO   = "reglamento_institucional"
 
 ALL_COLLECTIONS = [
     COL_FUGAS,
@@ -67,6 +68,7 @@ ALL_COLLECTIONS = [
     COL_EXCEPCIONES,
     COL_REPORTES,
     COL_CONDUCTA,
+    COL_REGLAMENTO,
 ]
 
 # ── Parámetros vectoriales para cada colección ────────────────────────────────
@@ -565,6 +567,199 @@ def seed_conducta_anual(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 6. Colección: reglamento_institucional  (datos estáticos — sin PG)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_reglamento_institucional(
+    qd: QdrantClient,
+    model: SentenceTransformer,
+) -> int:
+    """
+    Siembra las normas de justificación de inasistencias del reglamento
+    institucional como documentos vectoriales estáticos (no dependen de PG).
+
+    Regla de negocio:
+      El EvaluadorAgent usa la herramienta `consultar_reglamento` para hacer
+      búsqueda RAG sobre esta colección y decidir si una justificación de
+      inasistencia es válida según la normativa vigente del colegio.
+
+    Cada documento cubre un artículo específico del reglamento. El texto
+    completo se embebe para habilitar búsqueda semántica por situación.
+    """
+    _ensure_collection(qd, COL_REGLAMENTO)
+    print(f"🌱 Seeding {COL_REGLAMENTO}...")
+
+    # ── Artículos del reglamento (datos estáticos) ────────────────────────────
+    articulos = [
+        {
+            "id": "reglamento_art01",
+            "articulo": "Art. 1",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 1 – Justificaciones válidas de inasistencia. "
+                "Se consideran causas justificadas de inasistencia: la presentación de "
+                "certificado médico emitido por un profesional de salud colegiado, "
+                "la ocurrencia de una emergencia familiar debidamente documentada "
+                "(hospitalización, fallecimiento de familiar directo), y el viaje oficial "
+                "o representación institucional autorizada por la Dirección del plantel. "
+                "Ninguna otra causa será aceptada salvo resolución expresa de la Dirección."
+            ),
+        },
+        {
+            "id": "reglamento_art02",
+            "articulo": "Art. 2",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 2 – Plazo de presentación de la justificación. "
+                "El apoderado o el propio estudiante (si es mayor de edad) dispone de "
+                "un plazo máximo de 48 horas hábiles contadas desde el primer día de "
+                "la falta para presentar la documentación justificatoria. "
+                "Las justificaciones presentadas fuera de este plazo no serán admitidas "
+                "y la inasistencia quedará registrada como injustificada de manera definitiva. "
+                "En casos de hospitalización prolongada el plazo se extiende hasta 24 horas "
+                "después del alta médica."
+            ),
+        },
+        {
+            "id": "reglamento_art03",
+            "articulo": "Art. 3",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 3 – Límite de inasistencias injustificadas y sanción académica. "
+                "El estudiante que acumule inasistencias injustificadas superiores al 30 % "
+                "del total de sesiones programadas en cualquier área curricular durante "
+                "un período trimestral será calificado con nota desaprobatoria (cero) "
+                "en dicha área para ese período. "
+                "Si las inasistencias injustificadas superan el 30 % en el año lectivo completo, "
+                "el estudiante pierde el derecho a rendir exámenes de recuperación y "
+                "deberá repetir el grado."
+            ),
+        },
+        {
+            "id": "reglamento_art04",
+            "articulo": "Art. 4",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 4 – Modalidad de presentación de la justificación. "
+                "El apoderado debe presentar la documentación justificatoria de forma "
+                "presencial en la Secretaría del plantel o mediante la plataforma digital "
+                "oficial registrada por la institución. "
+                "No se aceptarán justificaciones enviadas por correo electrónico no "
+                "institucional, mensajería instantánea ni redes sociales. "
+                "La constancia de recepción emitida por la plataforma o por Secretaría "
+                "es el único comprobante válido de presentación dentro del plazo."
+            ),
+        },
+        {
+            "id": "reglamento_art05",
+            "articulo": "Art. 5",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 5 – Casos especiales: competencias y representación oficial. "
+                "Los estudiantes convocados para representar al colegio en competencias "
+                "deportivas, académicas, culturales o artísticas quedan exentos de las "
+                "consecuencias académicas por inasistencia durante los días del evento. "
+                "La exención debe ser autorizada previamente por la Dirección mediante "
+                "memorándum interno y comunicada a los docentes de cada área. "
+                "El estudiante deberá ponerse al día con los contenidos en un plazo "
+                "no mayor a cinco días hábiles tras su reintegro."
+            ),
+        },
+        {
+            "id": "reglamento_art06",
+            "articulo": "Art. 6",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 6 – Proceso de apelación de inasistencias injustificadas. "
+                "El apoderado que considere incorrecta la calificación de una inasistencia "
+                "como injustificada puede presentar una apelación formal ante la Dirección "
+                "académica dentro de los cinco días hábiles siguientes a la notificación. "
+                "La Dirección resolverá la apelación en un plazo máximo de diez días hábiles, "
+                "previa evaluación de la documentación adicional aportada. "
+                "La decisión de la Dirección es inapelable en sede institucional, "
+                "sin perjuicio de los recursos ante la autoridad educativa superior."
+            ),
+        },
+        {
+            "id": "reglamento_art07",
+            "articulo": "Art. 7",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 7 – Inasistencias por enfermedad crónica o tratamiento médico continuo. "
+                "Los estudiantes con diagnóstico de enfermedad crónica o que sigan un "
+                "tratamiento médico de larga duración pueden acogerse al régimen de "
+                "asistencia especial, previa presentación del informe médico al inicio "
+                "del año escolar o en el momento del diagnóstico. "
+                "Bajo este régimen, las inasistencias vinculadas al tratamiento no "
+                "computarán para el límite del 30 % establecido en el Art. 3, "
+                "siempre que el apoderado notifique cada ausencia dentro de las 24 horas."
+            ),
+        },
+        {
+            "id": "reglamento_art08",
+            "articulo": "Art. 8",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 8 – Registro y seguimiento de asistencia. "
+                "El registro de asistencia es responsabilidad del docente a cargo de "
+                "cada sesión de aprendizaje y debe ser ingresado al sistema dentro de "
+                "los primeros diez minutos de iniciada la clase. "
+                "Cualquier discrepancia entre el registro del docente y el sistema "
+                "biométrico de control de ingreso será resuelta por el área de "
+                "Supervisión, que emitirá la versión definitiva en un plazo de 24 horas. "
+                "El historial de asistencia es público para el apoderado a través de la "
+                "plataforma institucional."
+            ),
+        },
+        {
+            "id": "reglamento_art09",
+            "articulo": "Art. 9",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 9 – Tardanzas reiteradas como equivalente a inasistencia. "
+                "Tres tardanzas injustificadas en un mismo período trimestral equivalen "
+                "a una inasistencia injustificada a efectos del cómputo del Art. 3. "
+                "Se entiende por tardanza el ingreso al aula con más de diez minutos "
+                "de retraso respecto al horario oficial de inicio de la sesión. "
+                "El docente debe registrar la tardanza en el sistema con la misma "
+                "inmediatez que la inasistencia, indicando la hora real de ingreso."
+            ),
+        },
+        {
+            "id": "reglamento_art10",
+            "articulo": "Art. 10",
+            "categoria": "justificaciones",
+            "texto": (
+                "Art. 10 – Notificación al apoderado y comunicación oportuna. "
+                "El sistema enviará una notificación automática al apoderado registrado "
+                "cada vez que el estudiante acumule una inasistencia injustificada, "
+                "y una alerta de riesgo académico cuando supere el 20 % del límite "
+                "establecido en el Art. 3. "
+                "Es responsabilidad del apoderado mantener actualizados sus datos de "
+                "contacto en la plataforma institucional. "
+                "La no recepción de la notificación por datos desactualizados no exime "
+                "al estudiante de las consecuencias académicas descritas en el reglamento."
+            ),
+        },
+    ]
+
+    texts    = [a["texto"]    for a in articulos]
+    payloads = [
+        {
+            "articulo": a["articulo"],
+            "categoria": a["categoria"],
+            "texto": a["texto"]
+        }
+        for a in articulos
+    ]
+    ids      = [a["id"]       for a in articulos]
+
+    n = _upsert_batch(qd, COL_REGLAMENTO, model, texts, payloads, ids)
+    print(f"✅ {n} artículos del reglamento institucional vectorizados")
+    return n
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Orquestador principal
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -621,6 +816,10 @@ def run_all() -> None:
         # ── Nivel E: Conducta anual (cierre de año) ───────────────────────────
         print("\n📦 NIVEL E — Conducta anual (cierre de año / matrícula digital)")
         _paso("conducta_anual", seed_conducta_anual, pg, qd, model)
+
+        # ── Nivel F: Reglamento institucional (RAG del EvaluadorAgent) ────────
+        print("\n📦 NIVEL F — Reglamento institucional (RAG justificaciones)")
+        _paso("reglamento_institucional", seed_reglamento_institucional, qd, model)
 
         total_s = time.time() - inicio
         print(f"\n{'='*55}")
