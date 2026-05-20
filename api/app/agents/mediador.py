@@ -1,97 +1,102 @@
-import os
 import json
-import logging
+import os
+from openai import OpenAI
 from app.state.shared_state import SharedState
-import anthropic
-
-logger = logging.getLogger("MediadorAgent")
+from app.mcp.postgres_tools import mcp_registrar_citacion, mcp_gestionar_justificacion
+from app.mcp.schemas import RegistrarCitacionInput, GestionarJustificacionInput
 
 class MediadorAgent:
     def __init__(self):
+        self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"))
         self.system_prompt = """
-        Eres el Agente Mediador (Resolutor de Conflictos). Tu tarea es emitir una
-        decisión o acción final combinando la historia del alumno y las normas del colegio.
+        Eres el Agente Mediador y Resolutor de Conflictos. Tienes la máxima autoridad para alterar la base de datos del colegio.
+
+        Debes leer el analisis_conductual (historial de faltas del alumno en Postgres) y el resultado_rag_reglamento (las normas institucionales).
+
+        Toma de decisiones:
+        1. Si el alumno tiene un historial limpio y el reglamento ampara la excusa del padre, invoca mcp_gestionar_justificacion para registrar la falta como 'aprobada'.
+        2. Si la excusa viola los plazos del reglamento o el alumno es un reincidente crítico según el análisis conductual, deniega la justificación llamando a mcp_gestionar_justificacion con estado 'rechazada' e invoca inmediatamente mcp_registrar_citacion para obligar al padre a una reunión presencial con psicopedagogía.
+
+        Redacta el veredicto final detallado en el campo dictamen_final.
+        """
+        self.tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "mcp_registrar_citacion",
+                    "description": "Registra una citación presencial con apoderados.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "estudiante_uid": {"type": "string"},
+                            "padre_apoderado_uid": {"type": "string"},
+                            "docente_solicitante_uid": {"type": "string"},
+                            "motivo": {"type": "string"},
+                            "fecha_citacion": {"type": "string", "description": "Formato ISO ISO8601, ej: 2026-05-20T10:00:00"}
+                        },
+                        "required": ["estudiante_uid", "padre_apoderado_uid", "docente_solicitante_uid", "motivo", "fecha_citacion"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "mcp_gestionar_justificacion",
+                    "description": "Registra una justificación de incidencia formal.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "padre_solicitante_uid": {"type": "string"},
+                            "tipo_justificacion": {"type": "string"},
+                            "fecha_inicio_incidencia": {"type": "string", "format": "date"},
+                            "fecha_fin_incidencia": {"type": "string", "format": "date"},
+                            "descripcion_motivo": {"type": "string"}
+                        },
+                        "required": ["padre_solicitante_uid", "tipo_justificacion", "fecha_inicio_incidencia", "fecha_fin_incidencia", "descripcion_motivo"]
+                    }
+                }
+            }
+        ]
+
+    def ejecutar(self, state: SharedState) -> SharedState:
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": f"El estado completo es: {state.model_dump_json(indent=2)}\n\nToma una decisión final y activa la herramienta que corresponda."}
+        ]
+
+        while True:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=self.tools,
+                temperature=0.2
+            )
+            msg = response.choices[0].message
+            messages.append(msg.model_dump(exclude_unset=True))
+
+            if msg.tool_calls:
+                for tool_call in msg.tool_calls:
+                    args = json.loads(tool_call.function.arguments)
+                    try:
+                        if tool_call.function.name == "mcp_registrar_citacion":
+                            input_data = RegistrarCitacionInput(**args)
+                            tool_result = mcp_registrar_citacion(input_data)
+                        elif tool_call.function.name == "mcp_gestionar_justificacion":
+                            input_data = GestionarJustificacionInput(**args)
+                            tool_result = mcp_gestionar_justificacion(input_data)
+                        
+                        result_str = tool_result.model_dump_json()
+                    except Exception as e:
+                        result_str = f"Error MCP: {str(e)}"
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result_str
+                    })
+                    state.mcp_logs.append({"tool": tool_call.function.name, "args": args})
+            else:
+                state.dictamen_final = msg.content
+                break
         
-        Alcance:
-        1. Serás convocado cuando el 'analisis_conductual' y el 'resultado_rag_reglamento'
-           ya estén documentados en el SharedState.
-        2. Tienes que leer ambas variables y redactar un fallo oficial.
-        3. Tu respuesta puede ser: "Falta Justificada Aceptada", "Rechazada por falta de evidencia",
-           o "Requiere citación con apoderado".
-        4. NO debes invocar herramientas de base de datos de lectura.
-        5. Si determinas que se necesita una citación, indícalo expresamente para que el 
-           Orquestador ejecute la herramienta de MCP correspondiente.
-        6. Guarda tu resolución final en la variable 'dictamen_final' del SharedState.
-        7. Devuelve el control al Agente Orquestador.
-        """
-
-    def _parse_json(self, text: str) -> dict:
-        text = text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        return json.loads(text.strip())
-
-    def mediate(self, state: SharedState) -> SharedState:
-        """
-        Genera los mensajes finales para el padre y la administración basándose en el caso.
-        """
-        try:
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key:
-                logger.error("❌ ANTHROPIC_API_KEY no configurada.")
-                return state
-
-            client = anthropic.Anthropic(api_key=api_key)
-
-            # Obtener datos acumulados
-            evaluacion = getattr(state, "evaluacion", None)
-            if not evaluacion:
-                # Fallback al campo oficial
-                evaluacion = state.resultado_rag_reglamento or "Sin evaluación de reglamento."
-
-            analisis = getattr(state, "analisis", None)
-            if not analisis:
-                # Fallback al campo oficial
-                analisis = state.analisis_conductual or "Sin análisis conductual."
-
-            user_message = (
-                f"Evaluación del reglamento:\n{json.dumps(evaluacion, indent=2, default=str)}\n\n"
-                f"Análisis conductual previo:\n{json.dumps(analisis, indent=2, default=str)}\n\n"
-                f"Por favor genera un dictamen final. Responde ÚNICAMENTE con un JSON válido con estas claves:\n"
-                f"- 'mensaje_padre': string (mensaje en español dirigido al padre/apoderado con un tono muy empático)\n"
-                f"- 'nota_admin': string (nota interna formal dirigida a la administración escolar)\n"
-                f"No agregues texto fuera del JSON."
-            )
-
-            message = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1024,
-                system=self.system_prompt,
-                messages=[
-                    {"role": "user", "content": user_message}
-                ]
-            )
-
-            response_text = message.content[0].text.strip()
-            mensaje_final_json = self._parse_json(response_text)
-
-            # Actualizar state.mensaje_final (campo dinámico)
-            object.__setattr__(state, "mensaje_final", mensaje_final_json)
-            
-            # Sincronizar con el campo oficial de SharedState
-            state.dictamen_final = json.dumps(mensaje_final_json, ensure_ascii=False)
-
-            logger.info(f"🤝 Mediación final completada para el alumno {state.alumno_id}.")
-            return state
-
-        except Exception as e:
-            logger.error(f"❌ Error en MediadorAgent.mediate: {e}", exc_info=True)
-            return state
-
-    def resolve(self, state: SharedState) -> SharedState:
-        """Punto de entrada compatible con la versión anterior."""
-        return self.mediate(state)
+        return state
