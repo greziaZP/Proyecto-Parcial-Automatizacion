@@ -28,12 +28,19 @@ _env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path)
 print(_env_path)
 # ── Configuración PostgreSQL ───────────────────────────────────────────────────
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
 DB_CONFIG = {
-    "host":     os.getenv("POSTGRES_HOST",     "localhost"),
-    "port":     int(os.getenv("POSTGRES_PORT", "5432")),
-    "user":     os.getenv("POSTGRES_USER",     "postgres"),
-    "password": os.getenv("POSTGRES_PASSWORD", ""),
-    "dbname":   os.getenv("POSTGRES_DB", "postgres"),
+    "host":     _require_env("POSTGRES_HOST"),
+    "port":     int(_require_env("POSTGRES_PORT")),
+    "user":     _require_env("POSTGRES_USER"),
+    "password": _require_env("POSTGRES_PASSWORD"),
+    "dbname":   _require_env("POSTGRES_DB"),
 }
 
 _pool: pg_pool.SimpleConnectionPool | None = None
