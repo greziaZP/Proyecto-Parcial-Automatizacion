@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE_PUBLIC = os.getenv("API_BASE_URL_PUBLIC", API_BASE)
 
 
 def _safe_json(response: requests.Response) -> dict | None:
@@ -111,7 +112,7 @@ if (!parent.getElementById("chatbot-container")) {
     chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 }
 </script>
-""".replace('__API_BASE__', API_BASE)
+""".replace('__API_BASE__', API_BASE_PUBLIC)
 
 # ─── Configuración de la página ──────────────────────────────────────────────
 st.set_page_config(

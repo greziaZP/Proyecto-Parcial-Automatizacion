@@ -104,6 +104,20 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: ui_app
+    environment:
+      API_BASE_URL: http://api:8000
+      API_BASE_URL_PUBLIC: ${API_BASE_URL_PUBLIC:-http://localhost:8000}
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   pgdata:
   qdrant_data:
