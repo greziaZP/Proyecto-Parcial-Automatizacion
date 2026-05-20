@@ -64,28 +64,12 @@ HORA_LIMITE = time(8, 0, 0)  # 08:00 AM — umbral puntualidad
 
 # ─── Schemas Pydantic ─────────────────────────────────────────────────────────
 
-class EstudianteSinRostro(BaseModel):
-    uid: str
-    nombres: str
-    apellidos: str
+class RegistrarBiometriaRequest(BaseModel):
+    estudiante_id: str
+    imagen_base64: str  # Foto frontal del estudiante, sin prefijo "data:image/..."
 
-
-class RegistroRostroResponse(BaseModel):
-    success: bool
-    mensaje: str
-    face_id: str
-    estudiante_uid: str
-
-
-class IngresoResponse(BaseModel):
-    success: bool
-    mensaje: str
-    estudiante_uid: str
-    nombres: str
-    apellidos: str
-    estado_ingreso: str
-    hora_llegada: str
-
+class ReconocerRostroRequest(BaseModel):
+    imagen_base64: str
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ROUTER PRINCIPAL — Biometría
@@ -132,14 +116,16 @@ def estudiantes_sin_rostro():
     response_model=RegistroRostroResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Enrolar biometría facial de un estudiante (IndexFaces)",
+    summary="Enrolar biometría facial de un estudiante (IndexFaces)",
 )
 async def registrar_rostro(
     archivo: UploadFile = File(..., description="Foto frontal del estudiante"),
     estudiante_uid: str = Form(..., description="UID (UUID) del estudiante"),
 ):
     """
-    Recibe la foto del estudiante como UploadFile y la indexa en la colección
-    de AWS Rekognition. Guarda el `FaceId` devuelto en la tabla `estudiante`.
+    Recibe la foto del estudiante en Base64 y la indexa en la colección de
+    AWS Rekognition usando IndexFaces.
+    Guarda el face_id devuelto para usarlo luego en el reconocimiento.
     """
     imagen_bytes = await archivo.read()
 
@@ -155,7 +141,7 @@ async def registrar_rostro(
         response = rekognition.index_faces(
             CollectionId=COLLECTION_ID,
             Image={"Bytes": imagen_bytes},
-            ExternalImageId=estudiante_uid,
+            ExternalImageId=str(payload.estudiante_id),
             MaxFaces=1,
             QualityFilter="AUTO",
             DetectionAttributes=["DEFAULT"],
@@ -176,22 +162,12 @@ async def registrar_rostro(
         )
 
     face_id = face_records[0]["Face"]["FaceId"]
+    logger.info(f"Biometría enrolada: estudiante_id={payload.estudiante_id}, face_id={face_id}")
 
-    # ── Persistir face_id en PostgreSQL ──────────────────────────────────
-    with db_cursor() as cur:
-        cur.execute(
-            "UPDATE estudiante SET rekognition_face_id = %s WHERE uid = %s;",
-            (face_id, estudiante_uid),
-        )
-
-    logger.info(
-        "Rostro enrolado: estudiante_uid=%s, face_id=%s",
-        estudiante_uid, face_id,
-    )
-
+    # Nodo "Confirmar enrolamiento"
     return {
         "success": True,
-        "mensaje": f"Rostro registrado exitosamente. FaceId: {face_id}",
+        "estudiante_id": payload.estudiante_id,
         "face_id": face_id,
         "estudiante_uid": estudiante_uid,
     }
@@ -333,32 +309,3 @@ async def marcar_ingreso(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ROUTER REST — Alumnos / Cursos / Profesores
-# ─────────────────────────────────────────────────────────────────────────────
-
-router_rest = APIRouter(tags=["REST"])
-
-
-@router_rest.get("/alumnos", summary="Listar alumnos")
-def obtener_alumnos():
-    """Equivale al nodo n8n: GET Alumnos → Obtener Alumnos."""
-    with db_cursor() as cur:
-        cur.execute("SELECT uid, nombres, apellidos FROM estudiante;")
-        return cur.fetchall()
-
-
-@router_rest.get("/cursos", summary="Listar cursos")
-def obtener_cursos():
-    """Equivale al nodo n8n: GET Cursos → Obtener Cursos."""
-    with db_cursor() as cur:
-        cur.execute("SELECT uid, nombre FROM curso;")
-        return cur.fetchall()
-
-
-@router_rest.get("/profesores", summary="Listar profesores")
-def obtener_profesores():
-    """Equivale al nodo n8n: GET Profesores → Obtener Profesores."""
-    with db_cursor() as cur:
-        cur.execute("SELECT uid, nombres, apellidos FROM docente;")
-        return cur.fetchall()
