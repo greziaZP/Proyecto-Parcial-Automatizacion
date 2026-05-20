@@ -296,7 +296,7 @@ async def marcar_ingreso(
         if inserted:
             hora_llegada = inserted["hora_llegada"]
             estado_final = inserted["estado_ingreso"]
-            mensaje = f"Bienvenido {nombres} {apellidos}"
+            mensaje = "Registrado"
         else:
             cur.execute(
                 "SELECT hora_llegada, estado_ingreso "
@@ -314,7 +314,7 @@ async def marcar_ingreso(
 
             hora_llegada = previo["hora_llegada"]
             estado_final = previo["estado_ingreso"]
-            mensaje = f"Ingreso ya registrado para {nombres} {apellidos}"
+            mensaje = "Registrado"
 
     hora_str = hora_llegada.strftime("%H:%M:%S")
     logger.info(

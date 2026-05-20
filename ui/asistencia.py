@@ -68,15 +68,37 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 16px;
-        background: rgba(248, 249, 255, 0.9);
-        border: 1px solid var(--outline);
+        padding: 10px 18px;
+        background: #f3f6ff;
+        border: 1px solid rgba(0, 0, 0, 0.04);
         border-radius: 16px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
         position: sticky;
         top: 0;
         z-index: 2;
         backdrop-filter: blur(12px);
+    }
+
+    .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .nav-link {
+        text-decoration: none;
+        color: var(--muted);
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        background: transparent;
+        transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .nav-link.active {
+        background: #e6edff;
+        color: var(--primary);
     }
 
     .brand {
@@ -112,6 +134,45 @@ st.markdown("""
         border-radius: 16px;
         padding: 20px;
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .history-panel {
+        background: var(--surface);
+        border: 1px solid var(--outline);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+        position: sticky;
+        top: 92px;
+    }
+
+    .history-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 12px;
+    }
+
+    .history-item {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        padding: 10px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .history-item:last-child {
+        border-bottom: none;
+    }
+
+    .history-name {
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .history-meta {
+        font-size: 12px;
+        color: var(--muted);
     }
 
     .section-title {
@@ -237,20 +298,31 @@ if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
 if "foto_anterior_ingreso" not in st.session_state:
     st.session_state.foto_anterior_ingreso = None
+if "historial_asistencia" not in st.session_state:
+    st.session_state.historial_asistencia = []
+if "historial_key" not in st.session_state:
+    st.session_state.historial_key = None
 
 MAX_INTENTOS = 5
 
+query = st.query_params if hasattr(st, "query_params") else {}
+active_tab = query.get("tab", "ingreso") if isinstance(query, dict) else "ingreso"
+active_tab = active_tab if active_tab in {"ingreso", "registro"} else "ingreso"
+
+nav_ingreso = "nav-link active" if active_tab == "ingreso" else "nav-link"
+nav_registro = "nav-link active" if active_tab == "registro" else "nav-link"
+
 st.markdown(
-    """
+    f"""
     <div class="app-shell">
         <div class="topbar">
             <div class="brand">
                 <span class="material-symbols-outlined">fingerprint</span>
-                <span>BIOVERIFY</span>
+                <span>COLEGIO NARVAES</span>
             </div>
-            <div class="badge-live">
-                <span class="material-symbols-outlined" style="font-size:14px">sensors</span>
-                Sistema activo
+            <div class="nav-links">
+                <a class="{nav_ingreso}" href="?tab=ingreso">Escanear</a>
+                <a class="{nav_registro}" href="?tab=registro">Registrar</a>
             </div>
         </div>
     </div>
@@ -258,14 +330,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_enrolamiento, tab_ingreso = st.tabs(["Registro", "Ingreso"])
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 1: Enrolamiento de rostros
 # ─────────────────────────────────────────────────────────────────────────────
 
-with tab_enrolamiento:
+if active_tab == "registro":
     st.markdown("<div class=\"app-shell\">", unsafe_allow_html=True)
     left, right = st.columns([5, 7], gap="large")
 
@@ -339,9 +409,7 @@ with tab_enrolamiento:
                 placeholder="Elija un estudiante…",
             )
 
-        
             foto = st.camera_input("Camara de registro", key="registro_cam")
-            st.markdown("</div>", unsafe_allow_html=True)
 
             if st.button("Registrar rostro", type="primary", use_container_width=True):
                 if not seleccion:
@@ -382,95 +450,67 @@ with tab_enrolamiento:
 # TAB 2: Ingreso por puerta principal
 # ─────────────────────────────────────────────────────────────────────────────
 
-with tab_ingreso:
+if active_tab == "ingreso":
     st.markdown("<div class=\"app-shell\">", unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div class="panel">
-            <div class="section-title">Ingreso por puerta principal</div>
-            <div class="section-subtitle">Capture la foto y el sistema identificara al estudiante.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    main_col, history_col = st.columns([3, 1], gap="large")
 
-    # ── Mostrar resultado previo si existe ────────────────────────────────
-    resultado = st.session_state.ultimo_resultado
-
-    if resultado and resultado.get("tipo") == "exito":
-        data = resultado["data"]
-        estado = data["estado_ingreso"]
-        estado_texto = "A tiempo" if estado == "a_tiempo" else "Tardanza"
-
+    with main_col:
         st.markdown(
-            f"""
-            <div class="result-card result-success">
-                <div style="font-size:36px;">{"✅" if estado == "a_tiempo" else "⚠️"}</div>
-                <div style="font-size:20px; font-weight:700;">Asistencia registrada</div>
-                <div style="font-size:26px; font-weight:700; margin-top:6px;">{data["nombres"]} {data["apellidos"]}</div>
-                <div>
-                    <span class="badge-pill {"badge-success" if estado == "a_tiempo" else "badge-warning"}">
-                        {estado_texto}
-                    </span>
-                </div>
-                <div style="opacity:0.8; margin-top:6px;">Hora: {data["hora_llegada"]}</div>
+            """
+            <div class="panel">
+                <div class="section-title">Ingreso por puerta principal</div>
+                <div class="section-subtitle">Capture la foto y el sistema identificara al estudiante.</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    elif resultado and resultado.get("tipo") == "fallo":
-        st.markdown(
-            f"""
-            <div class="result-card result-error">
-                <div style="font-size:36px;">❌</div>
-                <div style="font-size:20px; font-weight:700;">No se pudo identificar al estudiante</div>
-                <div style="opacity:0.9; margin-top:6px;">
-                    Se agotaron los {MAX_INTENTOS} intentos de reconocimiento.<br>
-                    Verifique que el estudiante este enrolado en el sistema.
+        # ── Mostrar resultado previo si existe ────────────────────────────────
+        resultado = st.session_state.ultimo_resultado
+
+        if resultado and resultado.get("tipo") == "fallo":
+            st.markdown(
+                f"""
+                <div class="result-card result-error">
+                    <div style="font-size:36px;">❌</div>
+                    <div style="font-size:20px; font-weight:700;">No se pudo identificar al estudiante</div>
+                    <div style="opacity:0.9; margin-top:6px;">
+                        Se agotaron los {MAX_INTENTOS} intentos de reconocimiento.<br>
+                        Verifique que el estudiante este enrolado en el sistema.
+                    </div>
                 </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
 
-    # ── Barra de intentos ────────────────────────────────────────────────
-    intentos = st.session_state.intentos_ingreso
-    if intentos > 0 and (not resultado or resultado.get("tipo") != "exito"):
-        dots = ""
-        for i in range(MAX_INTENTOS):
-            clase = "used" if i < intentos else ""
-            dots += f'<div class="dot {clase}"></div>'
-        st.markdown(
-            f"""
-            <div class="attempts">{dots}</div>
-            <p style="text-align:center; color:#424656; font-size:13px;">
-                Intento {intentos} de {MAX_INTENTOS}
-            </p>
-            """,
-            unsafe_allow_html=True,
-        )
+        # ── Barra de intentos ────────────────────────────────────────────────
+        intentos = st.session_state.intentos_ingreso
+        if intentos > 0 and (not resultado or resultado.get("tipo") != "exito"):
+            dots = ""
+            for i in range(MAX_INTENTOS):
+                clase = "used" if i < intentos else ""
+                dots += f'<div class="dot {clase}"></div>'
+            st.markdown(
+                f"""
+                <div class="attempts">{dots}</div>
+                <p style="text-align:center; color:#424656; font-size:13px;">
+                    Intento {intentos} de {MAX_INTENTOS}
+                </p>
+                """,
+                unsafe_allow_html=True,
+            )
 
-    # ── Controles de cámara ──────────────────────────────────────────────
-    bloqueado = intentos >= MAX_INTENTOS
+        # ── Controles de cámara ──────────────────────────────────────────────
+        bloqueado = intentos >= MAX_INTENTOS
 
-    if bloqueado:
-        if st.button("🔄 Reintentar (resetear intentos)", type="primary", use_container_width=True):
-            st.session_state.intentos_ingreso = 0
-            st.session_state.ultimo_resultado = None
-            st.session_state.foto_anterior_ingreso = None
-            st.rerun()
-    else:
-        # Resetear resultado anterior si va a tomar nueva foto
-        if resultado and resultado.get("tipo") == "exito":
-            if st.button("📷 Registrar otro estudiante", type="secondary", use_container_width=True):
-                st.session_state.ultimo_resultado = None
+        if bloqueado:
+            if st.button("🔄 Reintentar (resetear intentos)", type="primary", use_container_width=True):
                 st.session_state.intentos_ingreso = 0
+                st.session_state.ultimo_resultado = None
                 st.session_state.foto_anterior_ingreso = None
                 st.rerun()
         else:
             foto_puerta = st.camera_input("Camara de la puerta principal", key="ingreso_cam")
-            st.markdown("</div>", unsafe_allow_html=True)
 
             # Envío automático al capturar foto (sin botón)
             if foto_puerta is not None:
@@ -492,11 +532,19 @@ with tab_ingreso:
                             data = _safe_json(resp)
 
                             if resp.status_code == 200 and data:
+                                key = f"{data.get('estudiante_uid')}-{data.get('hora_llegada')}"
+                                if key and key != st.session_state.historial_key:
+                                    st.session_state.historial_key = key
+                                    st.session_state.historial_asistencia.insert(0, {
+                                        "nombres": data.get("nombres", ""),
+                                        "apellidos": data.get("apellidos", ""),
+                                        "uid": data.get("estudiante_uid", ""),
+                                        "hora": data.get("hora_llegada", ""),
+                                    })
+                                    st.session_state.historial_asistencia = st.session_state.historial_asistencia[:20]
+
                                 st.session_state.intentos_ingreso = 0
-                                st.session_state.ultimo_resultado = {
-                                    "tipo": "exito",
-                                    "data": data,
-                                }
+                                st.session_state.ultimo_resultado = None
                                 st.rerun()
                             else:
                                 st.session_state.intentos_ingreso += 1
@@ -522,5 +570,28 @@ with tab_ingreso:
                                     f"Intento {st.session_state.intentos_ingreso}/{MAX_INTENTOS} "
                                     f"— Error de conexion: {e}"
                                 )
+
+    with history_col:
+        items = st.session_state.historial_asistencia
+        if items:
+            rows = "".join(
+                f"<div class=\"history-item\">"
+                f"<div class=\"history-name\">{item["nombres"]} {item["apellidos"]}</div>"
+                f"<div class=\"history-meta\">"
+                f"{"ID: " + item["uid"] if item["uid"] else ""}{" · " if item["uid"] else ""}Hora: {item["hora"]}"
+                f"</div>"
+                f"</div>"
+                for item in items
+            )
+        else:
+            rows = "<div class=\"history-meta\">Sin registros aún.</div>"
+
+        st.markdown(
+            f"<div class=\"history-panel\">"
+            f"<div class=\"history-title\">Historial del dia</div>"
+            f"{rows}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
