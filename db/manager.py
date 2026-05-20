@@ -105,26 +105,26 @@ def run_all():
         _paso("horario_clase",     seed_horario_clase)
 
         # ── NIVEL 6: Permisos ──────────────────────────────────────────────────
-        print("\n📦 NIVEL 6 — Permisos de salida")
-        _paso("permiso_salida",    seed_permiso_salida)
+        # print("\n📦 NIVEL 6 — Permisos de salida")
+        # _paso("permiso_salida",    seed_permiso_salida)
 
-        # ── NIVEL 7: Asistencia ────────────────────────────────────────────────
-        print("\n📦 NIVEL 7 — Registros de asistencia")
-        _paso("registro_ingreso",  seed_registro_ingreso)
-        _paso("asistencia_clase",  seed_asistencia_clase)
+        # # ── NIVEL 7: Asistencia ────────────────────────────────────────────────
+        # print("\n📦 NIVEL 7 — Registros de asistencia")
+        # _paso("registro_ingreso",  seed_registro_ingreso)
+        # _paso("asistencia_clase",  seed_asistencia_clase)
 
-        # ── NIVEL 8: Justificaciones ───────────────────────────────────────────
-        print("\n📦 NIVEL 8 — Justificaciones")
-        _paso("justificacion",     seed_justificacion)  # actualiza FKs en asistencia y ingreso
+        # # ── NIVEL 8: Justificaciones ───────────────────────────────────────────
+        # print("\n📦 NIVEL 8 — Justificaciones")
+        # _paso("justificacion",     seed_justificacion)  # actualiza FKs en asistencia y ingreso
 
-        # ── NIVEL 9: Incidencias y evaluación ─────────────────────────────────
-        print("\n📦 NIVEL 9 — Fugas y notas actitudinales")
-        _paso("fuga",              seed_fuga)
-        _paso("nota_actitudinal",  seed_nota_actitudinal)
+        # # ── NIVEL 9: Incidencias y evaluación ─────────────────────────────────
+        # print("\n📦 NIVEL 9 — Fugas y notas actitudinales")
+        # _paso("fuga",              seed_fuga)
+        # _paso("nota_actitudinal",  seed_nota_actitudinal)
 
-        # ── NIVEL 10: Citaciones ───────────────────────────────────────────────
-        print("\n📦 NIVEL 10 — Citaciones")
-        _paso("citacion",          seed_citacion)
+        # # ── NIVEL 10: Citaciones ───────────────────────────────────────────────
+        # print("\n📦 NIVEL 10 — Citaciones")
+        # _paso("citacion",          seed_citacion)
 
         # ── Resumen final ──────────────────────────────────────────────────────
         total_s = time.time() - inicio_total
