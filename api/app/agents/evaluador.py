@@ -30,15 +30,16 @@ class EvaluadorAgent:
             }
         }]
 
-    def ejecutar(self, state: SharedState) -> SharedState:
+    def ejecutar(self, state: SharedState, mensaje: str = "") -> SharedState:
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"El análisis conductual dice:\n{state.analisis_conductual}\n\nRevisa el reglamento para este caso."}
+            {"role": "user", "content": f"El padre solicita: '{mensaje}'\n\nEl análisis conductual dice:\n{state.analisis_conductual}\n\nRevisa el reglamento para este caso."}
         ]
 
         while True:
+            print(f"\n[EVALUADOR] Pensando... (Mensajes en historial: {len(messages)})")
             response = self.client.chat.completions.create(
-                model="gemini-1.5-flash",
+                model="gemini-2.5-flash-lite",
                 messages=messages,
                 tools=self.tools,
                 temperature=0.2
@@ -47,14 +48,17 @@ class EvaluadorAgent:
             messages.append(msg.model_dump(exclude_unset=True))
 
             if msg.tool_calls:
+                print(f"[EVALUADOR] Herramientas invocadas: {[t.function.name for t in msg.tool_calls]}")
                 for tool_call in msg.tool_calls:
                     if tool_call.function.name == "consultar_reglamento":
                         args = json.loads(tool_call.function.arguments)
+                        print(f"[EVALUADOR] Ejecutando consultar_reglamento con args: {args}")
                         try:
                             input_data = ConsultarReglamentoInput(query=args["query"])
                             tool_result = consultar_reglamento(input_data)
                             result_str = tool_result.model_dump_json()
                         except Exception as e:
+                            print(f"[EVALUADOR] Error ejecutando herramienta: {e}")
                             result_str = f"Error MCP: {str(e)}"
                         
                         messages.append({
@@ -64,7 +68,9 @@ class EvaluadorAgent:
                         })
                         state.mcp_logs.append({"tool": "consultar_reglamento", "args": args})
             else:
-                state.resultado_rag_reglamento = msg.content
+                final_text = msg.content or "Consulta al reglamento completada."
+                print(f"[EVALUADOR] Finalizó la consulta al reglamento: {final_text}")
+                state.resultado_rag_reglamento = final_text
                 break
         
         return state

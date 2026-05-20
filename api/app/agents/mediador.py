@@ -14,10 +14,10 @@ class MediadorAgent:
         Debes leer el analisis_conductual (historial de faltas del alumno en Postgres) y el resultado_rag_reglamento (las normas institucionales).
 
         Toma de decisiones:
-        1. Si el alumno tiene un historial limpio y el reglamento ampara la excusa del padre, invoca mcp_gestionar_justificacion para registrar la falta como 'aprobada'.
-        2. Si la excusa viola los plazos del reglamento o el alumno es un reincidente crítico según el análisis conductual, deniega la justificación llamando a mcp_gestionar_justificacion con estado 'rechazada' e invoca inmediatamente mcp_registrar_citacion para obligar al padre a una reunión presencial con psicopedagogía.
+        1. Si el alumno tiene un historial limpio y el reglamento ampara la excusa del padre, DEBES INVOCAR OBLIGATORIAMENTE la herramienta 'mcp_gestionar_justificacion' para registrar la falta como aprobada.
+        2. Si la excusa viola los plazos o el alumno es reincidente, INVOCA 'mcp_gestionar_justificacion' con estado 'rechazada' Y LUEGO INVOCA 'mcp_registrar_citacion'.
 
-        Redacta el veredicto final detallado en el campo dictamen_final.
+        IMPORTANTE: NO DEBES escribir el resultado de la función en formato JSON plano en tu texto. DEBES usar el sistema de Tools/Function Calling para activar las funciones reales con los UUID que se te proporcionan en estado completo (como padre_id, incidencia_id que se mapea a asistencia_clase_uid, etc).
         """
         self.tools = [
             {
@@ -58,15 +58,16 @@ class MediadorAgent:
             }
         ]
 
-    def ejecutar(self, state: SharedState) -> SharedState:
+    def ejecutar(self, state: SharedState, mensaje: str = "") -> SharedState:
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"El estado completo es: {state.model_dump_json(indent=2)}\n\nToma una decisión final y activa la herramienta que corresponda."}
+            {"role": "user", "content": f"Mensaje original del padre: '{mensaje}'\n\nEl estado completo es: {state.model_dump_json(indent=2)}\n\nToma una decisión final y activa la herramienta que corresponda OBLIGATORIAMENTE."}
         ]
 
         while True:
+            print(f"\n[MEDIADOR] Pensando... (Mensajes en historial: {len(messages)})")
             response = self.client.chat.completions.create(
-                model="gemini-1.5-flash",
+                model="gemini-2.5-flash-lite",
                 messages=messages,
                 tools=self.tools,
                 temperature=0.2
@@ -75,8 +76,10 @@ class MediadorAgent:
             messages.append(msg.model_dump(exclude_unset=True))
 
             if msg.tool_calls:
+                print(f"[MEDIADOR] Herramientas invocadas: {[t.function.name for t in msg.tool_calls]}")
                 for tool_call in msg.tool_calls:
                     args = json.loads(tool_call.function.arguments)
+                    print(f"[MEDIADOR] Ejecutando {tool_call.function.name} con args: {args}")
                     try:
                         if tool_call.function.name == "mcp_registrar_citacion":
                             input_data = RegistrarCitacionInput(**args)
@@ -87,6 +90,7 @@ class MediadorAgent:
                         
                         result_str = tool_result.model_dump_json()
                     except Exception as e:
+                        print(f"[MEDIADOR] Error ejecutando herramienta: {e}")
                         result_str = f"Error MCP: {str(e)}"
                     
                     messages.append({
@@ -96,7 +100,9 @@ class MediadorAgent:
                     })
                     state.mcp_logs.append({"tool": tool_call.function.name, "args": args})
             else:
-                state.dictamen_final = msg.content
+                final_text = msg.content or "Resolución ejecutada por el agente Mediador."
+                print(f"[MEDIADOR] Emitiendo dictamen final: {final_text}")
+                state.dictamen_final = final_text
                 break
         
         return state

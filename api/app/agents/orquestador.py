@@ -16,8 +16,13 @@ class OrquestadorAgent:
         
         Tus opciones válidas son: ["Analista", "Evaluador", "Mediador", "Finalizar"]
         
-        Flujo normal:
-        Usuario reporta falta -> Analista (ve el historial) -> Evaluador (ve las reglas) -> Mediador (registra citación/permiso) -> Finalizar.
+        Reglas estrictas de enrutamiento (EVITA BUCLES INFINITOS):
+        1. Si 'analisis_conductual' está vacío -> Llama al "Analista".
+        2. Si 'analisis_conductual' tiene datos, pero 'resultado_rag_reglamento' está vacío -> Llama al "Evaluador".
+        3. Si 'resultado_rag_reglamento' tiene datos, pero 'dictamen_final' está vacío -> Llama al "Mediador".
+        4. Si 'dictamen_final' tiene datos -> Llama a "Finalizar" de inmediato.
+        
+        NUNCA vuelvas a llamar a un agente si la tarea de su etapa ya se cumplió.
         """
         self.tools = [{
             "type": "function",
@@ -37,13 +42,14 @@ class OrquestadorAgent:
     def ejecutar(self, state: SharedState, mensaje: str = None) -> SharedState:
         # Se requiere orquestar repetidamente hasta Finalizar
         while True:
+            print(f"\n[ORQUESTADOR] Evaluando estado. analisis_conductual={bool(state.analisis_conductual)}, resultado_rag={bool(state.resultado_rag_reglamento)}, dictamen={bool(state.dictamen_final)}")
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": f"Mensaje usuario: {mensaje}\nSharedState:\n{state.model_dump_json(indent=2)}"}
             ]
 
             response = self.client.chat.completions.create(
-                model="gemini-1.5-flash",
+                model="gemini-2.5-flash-lite",
                 messages=messages,
                 tools=self.tools,
                 tool_choice={"type": "function", "function": {"name": "handoff"}},
@@ -55,6 +61,8 @@ class OrquestadorAgent:
             if msg.tool_calls:
                 args = json.loads(msg.tool_calls[0].function.arguments)
                 target_agent = args.get("target_agent", "Finalizar")
+                
+            print(f"[ORQUESTADOR] Decidió redirigir a: {target_agent}")
             
             state.estado_actual = target_agent
 
@@ -65,9 +73,9 @@ class OrquestadorAgent:
                 state = AnalistaAgent().ejecutar(state)
             elif target_agent == "Evaluador":
                 print("==> Transfiriendo a Agente Evaluador...")
-                state = EvaluadorAgent().ejecutar(state)
+                state = EvaluadorAgent().ejecutar(state, mensaje)
             elif target_agent == "Mediador":
                 print("==> Transfiriendo a Agente Mediador...")
-                state = MediadorAgent().ejecutar(state)
+                state = MediadorAgent().ejecutar(state, mensaje)
             
         return state
