@@ -187,7 +187,7 @@ ARTICULOS_REGLAMENTO = [
 # =============================================================================
 
 COLLECTION_NAME = "reglamento_asistencia"
-MODEL_NAME      = "all-MiniLM-L6-v2"
+MODEL_NAME      = "paraphrase-multilingual-MiniLM-L12-v2"
 VECTOR_SIZE     = 384
 QDRANT_HOST     = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT     = int(os.getenv("QDRANT_PORT", "6333"))
