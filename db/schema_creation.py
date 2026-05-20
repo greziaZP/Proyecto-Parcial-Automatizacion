@@ -321,7 +321,7 @@ def create_schema() -> None:
         cur.execute("""
             CREATE TABLE justificacion (
                 uid                      UUID                 PRIMARY KEY DEFAULT gen_random_uuid(),
-                asistencia_clase_uid     UUID                 NOT NULL, -- FK diferida
+                asistencia_clase_uid     UUID                 ,
                 tipo_justificacion       tipo_justificacion   NOT NULL,
                 estado_justificacion     estado_justificacion NOT NULL DEFAULT 'pendiente',
                 padre_solicitante_uid    UUID                 NOT NULL
