@@ -8,7 +8,7 @@ class SharedState(BaseModel):
     """
     # Identificadores basicos
     alumno_id: str
-    incidencia_id: str
+    incidencia_id: Optional[str] = None
     padre_id: Optional[str] = None
     docente_id: Optional[str] = None
     

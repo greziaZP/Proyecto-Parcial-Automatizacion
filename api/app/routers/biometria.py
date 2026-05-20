@@ -22,11 +22,32 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
-from db import db_cursor
+from app.db import db_cursor
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+class EstudianteSinRostro(BaseModel):
+    uid: str
+    nombres: str
+    apellidos: str
+
+class RegistroRostroResponse(BaseModel):
+    success: bool
+    estudiante_id: str
+    face_id: str
+    estudiante_uid: str
+
+class IngresoResponse(BaseModel):
+    success: bool
+    mensaje: str
+    estudiante_uid: str
+    nombres: str
+    apellidos: str
+    estado_ingreso: str
+    hora_llegada: str
 
 # ─── Cliente AWS Rekognition ──────────────────────────────────────────────────
 rekognition = boto3.client(
@@ -116,7 +137,6 @@ def estudiantes_sin_rostro():
     response_model=RegistroRostroResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Enrolar biometría facial de un estudiante (IndexFaces)",
-    summary="Enrolar biometría facial de un estudiante (IndexFaces)",
 )
 async def registrar_rostro(
     archivo: UploadFile = File(..., description="Foto frontal del estudiante"),
@@ -141,7 +161,7 @@ async def registrar_rostro(
         response = rekognition.index_faces(
             CollectionId=COLLECTION_ID,
             Image={"Bytes": imagen_bytes},
-            ExternalImageId=str(payload.estudiante_id),
+            ExternalImageId=str(estudiante_uid),
             MaxFaces=1,
             QualityFilter="AUTO",
             DetectionAttributes=["DEFAULT"],
@@ -162,12 +182,12 @@ async def registrar_rostro(
         )
 
     face_id = face_records[0]["Face"]["FaceId"]
-    logger.info(f"Biometría enrolada: estudiante_id={payload.estudiante_id}, face_id={face_id}")
+    logger.info(f"Biometría enrolada: estudiante_uid={estudiante_uid}, face_id={face_id}")
 
     # Nodo "Confirmar enrolamiento"
     return {
         "success": True,
-        "estudiante_id": payload.estudiante_id,
+        "estudiante_id": str(estudiante_uid),
         "face_id": face_id,
         "estudiante_uid": estudiante_uid,
     }
