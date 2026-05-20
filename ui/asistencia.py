@@ -306,7 +306,11 @@ if "historial_key" not in st.session_state:
 MAX_INTENTOS = 5
 
 query = st.query_params if hasattr(st, "query_params") else {}
-active_tab = query.get("tab", "ingreso") if isinstance(query, dict) else "ingreso"
+raw_tab = query.get("tab", "ingreso") if hasattr(query, "get") else "ingreso"
+if isinstance(raw_tab, list):
+    active_tab = raw_tab[0] if raw_tab else "ingreso"
+else:
+    active_tab = raw_tab
 active_tab = active_tab if active_tab in {"ingreso", "registro"} else "ingreso"
 
 nav_ingreso = "nav-link active" if active_tab == "ingreso" else "nav-link"
@@ -321,8 +325,8 @@ st.markdown(
                 <span>COLEGIO NARVAES</span>
             </div>
             <div class="nav-links">
-                <a class="{nav_ingreso}" href="?tab=ingreso">Escanear</a>
-                <a class="{nav_registro}" href="?tab=registro">Registrar</a>
+                <a class="{nav_ingreso}" href="?tab=ingreso" target="_self">Escanear</a>
+                <a class="{nav_registro}" href="?tab=registro" target="_self">Registrar</a>
             </div>
         </div>
     </div>
