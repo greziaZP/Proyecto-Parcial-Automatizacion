@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get_connection, release_connection, close_pool
 
+
 TIPOS       = ["medica", "familiar", "viaje", "otra"]
 ESTADOS_J   = ["pendiente", "aprobada", "rechazada"]
 PESOS_EST   = [0.3, 0.6, 0.1]          # pendiente 30%, aprobada 60%, rechazada 10%

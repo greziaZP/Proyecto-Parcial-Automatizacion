@@ -35,6 +35,7 @@ async def marcar_asistencia(
         "detectados": mock_alumnos_detectados
     }
 
+
 @router.post("/cierre")
 async def cierre_asistencia(request: CierreRequest):
     """

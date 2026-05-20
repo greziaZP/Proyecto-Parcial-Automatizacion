@@ -20,6 +20,7 @@ def seed_ano_escolar(conn=None) -> dict[str, str]:
         ("2024", "2024-03-04", "2024-12-13", False),
         ("2025", "2025-03-03", "2025-12-12", True),
     ]
+    
     uids: dict[str, str] = {}
 
     try:

@@ -174,6 +174,7 @@ def _serializar_justificacion(fila: dict) -> dict:
 
 def query_listar_justificaciones() -> List[Dict[str, Any]]:
     conn = get_db_connection()
+    
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""

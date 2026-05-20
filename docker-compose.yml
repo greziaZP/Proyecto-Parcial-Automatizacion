@@ -103,3 +103,4 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    

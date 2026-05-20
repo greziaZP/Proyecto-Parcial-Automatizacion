@@ -26,6 +26,7 @@ def consultar_reglamento(input_data: ConsultarReglamentoInput) -> ConsultarRegla
             limit=3
         )
         
+        
         articulos = []
         textos = []
         

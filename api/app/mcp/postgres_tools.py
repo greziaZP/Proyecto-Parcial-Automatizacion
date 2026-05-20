@@ -34,6 +34,7 @@ def mcp_gestionar_justificacion(input_data: GestionarJustificacionInput) -> Gest
         status="success"
     )
 
+
 def mcp_registrar_citacion(input_data: RegistrarCitacionInput) -> RegistrarCitacionOutput:
     """
     Registra de manera formal una nueva citación presencial en PostgreSQL.

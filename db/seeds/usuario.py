@@ -18,6 +18,7 @@ from config import get_connection, release_connection, close_pool, SeedConfig
 fake = Faker("es_ES")
 
 
+
 def seed_usuario(conn=None) -> dict[str, list[str]]:
     """
     Inserta usuarios y retorna UIDs agrupados por rol:

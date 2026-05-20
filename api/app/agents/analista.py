@@ -95,4 +95,5 @@ class AnalistaAgent:
 
         print(f"[ANALISTA] Guardando análisis textual: {final_text}")
         state.analisis_conductual = final_text
+        
         return state

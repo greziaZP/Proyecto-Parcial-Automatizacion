@@ -35,6 +35,7 @@ def _require_env(name: str) -> str:
     return value
 
 
+
 DB_CONFIG = {
     "host":     _require_env("POSTGRES_HOST"),
     "port":     int(_require_env("POSTGRES_PORT")),

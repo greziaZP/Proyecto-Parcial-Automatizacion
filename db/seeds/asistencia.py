@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get_connection, release_connection, close_pool, SeedConfig
 
 
+
 def _dias_habiles(inicio: date, cantidad: int) -> list[date]:
     """Genera `cantidad` días L-V a partir de `inicio`."""
     dias, d = [], inicio

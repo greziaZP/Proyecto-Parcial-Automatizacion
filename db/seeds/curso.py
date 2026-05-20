@@ -20,6 +20,7 @@ CURSOS = [
 ]
 
 
+
 def seed_curso(conn=None, cursos: list[tuple] | None = None) -> dict[str, str]:
     """
     Inserta cursos y retorna {codigo: uid}.

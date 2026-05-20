@@ -50,6 +50,7 @@ import sys
 from config import get_connection, release_connection, close_pool
 
 
+
 def create_schema() -> None:
     conn = get_connection()
     conn.autocommit = False

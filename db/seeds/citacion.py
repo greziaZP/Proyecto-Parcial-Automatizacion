@@ -76,3 +76,4 @@ def seed_citacion() -> None:
     finally:
         cur.close()
         release_connection(conn)
+

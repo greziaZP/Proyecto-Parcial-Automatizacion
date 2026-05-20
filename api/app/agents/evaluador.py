@@ -13,6 +13,7 @@ EVALUADOR_FORCED_PROMPT = """Con base en los artículos del reglamento devueltos
 No inventes reglas, básate solo en lo que devolvió la herramienta."""
 
 class EvaluadorAgent:
+    
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.system_prompt = """

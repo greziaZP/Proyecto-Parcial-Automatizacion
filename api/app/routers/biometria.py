@@ -37,6 +37,7 @@ rekognition = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
 )
 
+
 COLLECTION_ID = os.getenv("REKOGNITION_COLLECTION_ID", "colegio_faces")
 
 

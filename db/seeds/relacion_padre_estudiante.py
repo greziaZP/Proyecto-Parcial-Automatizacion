@@ -18,6 +18,7 @@ def seed_relacion_padre_estudiante(conn=None) -> int:
     _local = conn is None
     if _local: conn = get_connection()
     cur = conn.cursor()
+    
     try:
         print("🌱 Seeding relacion_padre_estudiante...")
 

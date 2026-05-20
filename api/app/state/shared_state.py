@@ -25,3 +25,4 @@ class SharedState(BaseModel):
     
     # Registro de herramientas MCP ejecutadas
     mcp_logs: List[Dict[str, Any]] = Field(default_factory=list)
+

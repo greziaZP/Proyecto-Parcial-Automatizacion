@@ -9,6 +9,7 @@ MEDIADOR_FORCED_PROMPT = """Ahora redacta tu dictamen final como mensaje directo
 
 class MediadorAgent:
     def __init__(self):
+        
         self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.system_prompt = """
         Eres el asistente virtual del Colegio Rafael Narváez Cadenillas que atiende a los padres de familia. Tienes autoridad para registrar justificaciones y citaciones en el sistema.

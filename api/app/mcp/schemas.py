@@ -22,6 +22,7 @@ class GestionarJustificacionInput(BaseModel):
 class GestionarJustificacionOutput(BaseModel):
     justificacion_uid: UUID
     status: str
+    
 
 class ConsultarReglamentoInput(BaseModel):
     query: str

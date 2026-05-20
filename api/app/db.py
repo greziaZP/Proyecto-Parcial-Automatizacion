@@ -38,6 +38,7 @@ def _obtener_pool() -> pg_pool.SimpleConnectionPool:
     return _pool
 
 
+
 @contextmanager
 def db_cursor(dict_cursor: bool = True):
     """

@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get_connection, release_connection, close_pool, SeedConfig
 
 
+
 def seed_permiso_salida(conn=None) -> list[str]:
     """Retorna lista de UIDs de permisos creados."""
     _local = conn is None

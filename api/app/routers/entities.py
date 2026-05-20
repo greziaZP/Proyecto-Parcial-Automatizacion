@@ -19,6 +19,7 @@ def obtener_cursos() -> List[Dict[str, Any]]:
         return query_get_cursos()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error consultando cursos: {str(e)}")
+    
 
 @router.get("/profesores", summary="Listar profesores reales")
 def obtener_profesores() -> List[Dict[str, Any]]:

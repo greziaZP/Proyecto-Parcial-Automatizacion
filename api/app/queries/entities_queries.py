@@ -26,6 +26,7 @@ def query_get_estudiantes() -> List[Dict[str, Any]]:
             return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
+        
 
 def query_get_cursos() -> List[Dict[str, Any]]:
     """Obtiene la lista de cursos desde la base de datos."""

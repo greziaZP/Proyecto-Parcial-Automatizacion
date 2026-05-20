@@ -14,6 +14,7 @@ class OrquestadorAgent:
         if not state.dictamen_final:
             return "Mediador"
         return "Finalizar"
+    
 
     def ejecutar(self, state: SharedState, mensaje: str = None) -> SharedState:
         while True:

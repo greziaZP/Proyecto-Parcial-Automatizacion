@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get_connection, release_connection, close_pool
 
 
+
 def seed_fuga(conn=None) -> int:
     """Retorna cantidad de fugas insertadas."""
     _local = conn is None

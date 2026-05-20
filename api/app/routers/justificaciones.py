@@ -61,6 +61,7 @@ def _ejecutar_swarm(state: SharedState, mensaje: str) -> SharedState:
     return orquestador.ejecutar(state, mensaje)
 
 
+
 @router.get("/", response_model=List[JustificacionItem])
 def listar_justificaciones():
     filas = query_listar_justificaciones()
