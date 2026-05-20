@@ -21,6 +21,7 @@ class SharedState(BaseModel):
     analisis_conductual: Optional[str] = None
     resultado_rag_reglamento: Optional[str] = None
     dictamen_final: Optional[str] = None
+    justificacion_uid: Optional[str] = None
     
     # Registro de herramientas MCP ejecutadas
     mcp_logs: List[Dict[str, Any]] = Field(default_factory=list)

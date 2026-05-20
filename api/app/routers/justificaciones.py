@@ -31,6 +31,8 @@ class ChatResponse(BaseModel):
     analisis_conductual: Optional[str] = None
     resultado_rag_reglamento: Optional[str] = None
     dictamen_final: Optional[str] = None
+    mensaje_respuesta: Optional[str] = None
+    justificacion_uid: Optional[str] = None
     mcp_logs: list = []
 
 
@@ -72,6 +74,8 @@ async def chat_justificacion(
         analisis_conductual=resultado.analisis_conductual,
         resultado_rag_reglamento=resultado.resultado_rag_reglamento,
         dictamen_final=resultado.dictamen_final,
+        mensaje_respuesta=resultado.dictamen_final,
+        justificacion_uid=resultado.justificacion_uid,
         mcp_logs=resultado.mcp_logs,
     )
 

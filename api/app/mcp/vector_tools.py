@@ -33,10 +33,15 @@ def consultar_reglamento(input_data: ConsultarReglamentoInput) -> ConsultarRegla
         for hit in search_result:
             payload = hit.payload or {}
             articulo_titulo = payload.get("articulo", "Artículo Desconocido")
-            contenido = payload.get("texto", "")
-            
+            contenido = payload.get("texto_completo", "") or payload.get("texto", "")
+            reglas = payload.get("reglas_clave", [])
+            reglas_str = "\n  - ".join(reglas) if reglas else ""
+
             articulos.append(articulo_titulo)
-            textos.append(f"[{articulo_titulo}]: {contenido}")
+            entrada = f"[{articulo_titulo} — {payload.get('titulo', '')}]: {contenido}"
+            if reglas_str:
+                entrada += f"\n  Reglas clave:\n  - {reglas_str}"
+            textos.append(entrada)
             
         contexto_concatenado = "\n".join(textos) if textos else "No se encontraron normativas que coincidan con la búsqueda."
         

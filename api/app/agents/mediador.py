@@ -5,11 +5,17 @@ from app.state.shared_state import SharedState
 from app.mcp.postgres_tools import mcp_registrar_citacion, mcp_gestionar_justificacion
 from app.mcp.schemas import RegistrarCitacionInput, GestionarJustificacionInput
 
+MEDIADOR_FORCED_PROMPT = """Redacta el dictamen final dirigido al padre de familia. Sé cálido pero profesional. Explica:
+- Qué se decidió (aprobada/rechazada/pendiente) y por qué.
+- Qué artículos del reglamento aplican.
+- Qué pasos debe seguir el padre (ej: si debe adjuntar certificado médico, asistir a citación, etc.).
+Personaliza según el historial del alumno y las normas que aplican. No seas genérico."""
+
 class MediadorAgent:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("AI_MODEL_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.system_prompt = """
-        Eres el Agente Mediador y Resolutor de Conflictos. Tienes la máxima autoridad para alterar la base de datos del colegio.
+        Eres el Agente Mediador y Resolutor de Conflictos del Colegio Rafael Narváez Cadenillas. Tienes la máxima autoridad para alterar la base de datos del colegio.
 
         Debes leer el analisis_conductual (historial de faltas del alumno en Postgres) y el resultado_rag_reglamento (las normas institucionales).
 
@@ -25,7 +31,14 @@ class MediadorAgent:
 
         NUNCA uses valores como "JUSTIFICACION_MEDICA". Usa SIEMPRE los valores en minúsculas: medica, familiar, viaje, otra.
 
-        IMPORTANTE: NO DEBES escribir el resultado de la función en formato JSON plano en tu texto. DEBES usar el sistema de Tools/Function Calling para activar las funciones reales con los UUID que se te proporcionan en estado completo (como padre_id, docente_id, incidencia_id que se mapea a asistencia_clase_uid, etc).
+        DESPUÉS de invocar las herramientas, DEBES redactar un dictamen_final dirigido al padre de familia. Este dictamen debe:
+        - Ser cálido pero profesional, como si le hablaras directamente al padre.
+        - Explicar en lenguaje natural qué se decidió, por qué (citando los artículos del reglamento si aplica), y qué pasos sigue.
+        - Indicar claramente si la justificación fue aprobada, rechazada o está pendiente.
+        - Si se requiere alguna acción adicional (como adjuntar certificado médico o asistir a citación), mencionarlo.
+        - NUNCA ser genérico. Personaliza según el historial del alumno y las normas que aplican.
+
+        IMPORTANTE: NO DEBES escribir el resultado de la función en formato JSON plano en tu texto. DEBES usar el sistema de Tools/Function Calling para activar las funciones reales con los UUID que se te proporcionan en estado completo.
         """
         self.tools = [
             {
@@ -96,6 +109,8 @@ class MediadorAgent:
                         elif tool_call.function.name == "mcp_gestionar_justificacion":
                             input_data = GestionarJustificacionInput(**args)
                             tool_result = mcp_gestionar_justificacion(input_data)
+                            if tool_result.justificacion_uid:
+                                state.justificacion_uid = str(tool_result.justificacion_uid)
                         
                         result_str = tool_result.model_dump_json()
                     except Exception as e:
@@ -109,9 +124,19 @@ class MediadorAgent:
                     })
                     state.mcp_logs.append({"tool": tool_call.function.name, "args": args})
             else:
-                final_text = msg.content or "Resolución ejecutada por el agente Mediador."
-                print(f"[MEDIADOR] Emitiendo dictamen final: {final_text}")
-                state.dictamen_final = final_text
                 break
-        
+
+        final_text = msg.content
+        if not final_text:
+            print("[MEDIADOR] LLM no generó texto, forzando redacción...")
+            messages.append({"role": "user", "content": MEDIADOR_FORCED_PROMPT})
+            response = self.client.chat.completions.create(
+                model="gemini-2.5-flash-lite",
+                messages=messages,
+                temperature=0.3
+            )
+            final_text = response.choices[0].message.content
+
+        print(f"[MEDIADOR] Emitiendo dictamen final: {final_text}")
+        state.dictamen_final = final_text
         return state
