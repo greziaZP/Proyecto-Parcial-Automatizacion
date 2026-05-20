@@ -9,10 +9,12 @@ class SharedState(BaseModel):
     # Identificadores básicos
     alumno_id: str
     incidencia_id: str
+    padre_id: Optional[str] = None
     
     # Estado del flujo
     tipo_flujo: str
     estado_actual: str
+    fecha_actual: Optional[str] = None
     
     # Diagnósticos o textos acumulados de cada agente
     analisis_conductual: Optional[str] = None

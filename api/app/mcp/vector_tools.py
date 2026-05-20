@@ -22,7 +22,7 @@ def consultar_reglamento(input_data: ConsultarReglamentoInput) -> ConsultarRegla
         
         # Búsqueda semántica en Qdrant
         search_result = client.search(
-            collection_name="reglamento_institucional",
+            collection_name="reglamento_asistencia",
             query_vector=query_vector,
             limit=3
         )

@@ -23,7 +23,7 @@ def query_historial_estudiante(estudiante_uid: str) -> Dict[str, Any]:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 1. Traer últimas 10 inasistencias/tardanzas
             cur.execute("""
-                SELECT fecha_asistencia, estado_asistencia, observacion
+                SELECT fecha_asistencia, estado_asistencia, observacion_docente
                 FROM asistencia_clase
                 WHERE estudiante_uid = %s 
                   AND estado_asistencia IN ('falta', 'tardanza')

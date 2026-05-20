@@ -19,11 +19,14 @@ def test_swarm():
         return
 
     # Usamos identificadores quemados de ejemplo solo para la prueba en la terminal
+    from datetime import date
     estado_inicial = SharedState(
         alumno_id="b319354c-d876-4231-a69c-97e87c776646",
         incidencia_id=str(uuid.uuid4()),
+        padre_id=str(uuid.uuid4()),  # Simulamos un padre en la DB
         tipo_flujo="JUSTIFICACION_MEDICA",
-        estado_actual="INICIO"
+        estado_actual="INICIO",
+        fecha_actual=str(date.today())
     )
 
     mensaje_usuario = "Soy el padre del estudiante, quiero justificar porque hoy amaneció enfermo y se fue al seguro."
